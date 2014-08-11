@@ -32,15 +32,27 @@ pairMap = { 0b00:"bc", 0b01:"de", 0b10:"hl", 0b11:"sp" }
 
 
 """ Helper Functions """
-def add(a,b):
-	pass
-
 def setflag(n,val):
 	mask = "0000"
 	mask[n] = str(val)
 
 	r["f"] = r["f"] | (int(mask) << 4)
 	return r["f"]
+
+def add(a,b):
+	res = a + b
+
+	# Set if zero
+	setflag(0, res == 0)
+	# Reset subtration bit
+	setflag(1, 0)
+	# Check for carry from 4th to 5th bit
+	setflag(2, ((a&0xF)+(b&0xF) > 0xF))
+	# Check for overflow
+	setflag(3, res > 0xFF)
+
+	return res
+
 
 while running:
 	opcode = read(pc)
@@ -207,6 +219,24 @@ while running:
 		write(r["sp"]&0xFF, pc+1)
 		write(r["sp"]>>8, pc+2)
 		cycles=5; pc+=3
+
+	elif opcode & 0b11111000 == 0b10000000:
+		r["a"] = add(r["a"], byteRegMap[opcode&0b00000111])
+		cycles=1; pc+=1
+
+	elif opcode == 0b11000110:
+		r["a"] = add(r["a"], read(pc+1))
+		cycles=2; pc+=2
+
+	elif opcode == 0b10000110:
+		r["a"] = add(r["a"], read((r["h"]<<8) | r["l"]))
+		cycles=2; pc+=1
+
+	elif opcode & 0b11000111 == 0b00000100:
+		result = r[byteRegMap[(opcode&0b00111000)>>3]] + 1
+		setflag(0, result == 0)
+		setflag(1, 0)
+		setflag(2, )
 
 
 	""" When interrupts need to be checked """
