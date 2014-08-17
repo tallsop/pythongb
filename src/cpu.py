@@ -233,10 +233,24 @@ while running:
 		cycles=2; pc+=1
 
 	elif opcode & 0b11000111 == 0b00000100:
-		result = r[byteRegMap[(opcode&0b00111000)>>3]] + 1
+		old = r[byteRegMap[(opcode&0b00111000)>>3]]
+		result = old + 1
 		setflag(0, result == 0)
 		setflag(1, 0)
-		setflag(2, )
+		setflag(2, ((old&0xF) + 1) > 0xF)
+		
+		r[byteRegMap[(opcode&0b00111000)>>3]]+=1
+
+	elif opcode == 0b00110100:
+		old = read((r["h"]<<8)|r["l"]))
+		result = old + 1
+		setflag(0, result == 0)
+		setflag(1, 0)
+		setflag(2, ((old&0xF) + 1) > 0xF)
+
+		write((r["h"]<<8)|r["l"], result)
+
+	
 
 
 	""" When interrupts need to be checked """
