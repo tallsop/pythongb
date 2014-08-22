@@ -252,6 +252,8 @@ while running:
 
 	
 
+	
+
 
 	""" When interrupts need to be checked """
 	if clock <= 0:
