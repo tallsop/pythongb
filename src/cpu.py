@@ -39,6 +39,9 @@ def setflag(n,val):
 	r["f"] = r["f"] | (int(mask) << 4)
 	return r["f"]
 
+def getflag(n):
+	return r["f"][n]
+
 def add(a,b):
 	res = a + b
 
@@ -201,7 +204,10 @@ while running:
 		if e & 0x80:
 			e = e - 0x100
 
-		r["sp"]+=e
+		val = r["sp"] + e
+
+		r["h"] = val >> 8
+		r["l"] = val & 0xFF
 
 		""" Code below is found here: http://stackoverflow.com/questions/5159603/gbz80-how-does-ld-hl-spe-affect-h-and-c-flags
 			It is an answer suggested by Fascia. """
@@ -213,7 +219,7 @@ while running:
 			setflag(2, (temp & 0xF) <= (r["sp"] & 0xF))
 			setflag(3, (temp & 0xFF) <= (r["sp"] & 0xFF))
 
-		cycles=3; pc+=1
+		cycles=3; pc+=2
 
 	elif opcode == 0b00001000:
 		write(r["sp"]&0xFF, pc+1)
@@ -239,7 +245,8 @@ while running:
 		setflag(1, 0)
 		setflag(2, ((old&0xF) + 1) > 0xF)
 		
-		r[byteRegMap[(opcode&0b00111000)>>3]]+=1
+		r[byteRegMap[(opcode&0b00111000)>>3]]=result
+		cycles=1; pc+=1
 
 	elif opcode == 0b00110100:
 		old = read((r["h"]<<8)|r["l"]))
@@ -249,11 +256,114 @@ while running:
 		setflag(2, ((old&0xF) + 1) > 0xF)
 
 		write((r["h"]<<8)|r["l"], result)
+		cycles=3; pc+=1
 
+	elif opcode & 0b11000111 == 0b00000101:
+		old = r[byteRegMap[(opcode&0b00111000)>>3]]
+		result = old - 1
+		setflag(0, result == 0)
+		setflag(1, 1)
+		setflag(2, ((old&0xF) - 1) > 0xF)
+
+		r[byteRegMap[(opcode&0b00111000)>>3]]=result
+		cycles=1; pc+=1
+
+	elif opcode == 0b00110101:
+		old = read((r["h"]<<8)|r["l"]))
+		result = old - 1
+		setflag(0, result == 0)
+		setflag(1, 1)
+		setflag(2, ((old&0xF) - 1) > 0xF)
+
+		write((r["h"]<<8)|r["l"], result)
+		cycles=3; pc+=1
+
+	# 16 Bit Artimetic Operations
+
+	elif opcode & 0b11001111 == 0b00001001:
+		register = pairMap[(opcode&0b00110000)>>4]
+		value = (register[0] << 8) | register[1]
+		reg = r["h"] << 8 | r["l"]
+		
+		setflag(1, 0)
+		setflag(2, (value&0xF) + (reg*0xF) > 0xF)
+		setflag(3, value + reg > 0xFF)
+
+		reg += value
+		cycles=2; pc+=1
+
+	elif opcode == 0b11101000:
+		e = read(pc+1) #2's complement
+		temp = r["sp"]
+		if e & 0x80:
+			e = e - 0x100
+
+		r["sp"]+=e
+
+		""" Code below is found here: http://stackoverflow.com/questions/5159603/gbz80-how-does-ld-hl-spe-affect-h-and-c-flags
+			It is an answer suggested by Fascia. """
+
+		if e >= 0:
+			setflag(2, ((r["sp"] & 0xF) + (e & 0xF)) > 0xF)
+			setflag(3, ((r["sp"] & 0xFF) + e) > 0xFF)
+		else:
+			setflag(2, (temp & 0xF) <= (r["sp"] & 0xF))
+			setflag(3, (temp & 0xFF) <= (r["sp"] & 0xFF))
+
+		cycles=4; pc+=2
+
+	elif opcode & 0b11001111 == 0b00000011:
+		register = pairMap[(opcode&0b00110000)>>4]
+		value = ((r[register[0]] << 8)  | r[register[1]]) + 1
+
+		r[register[0]] = value >> 8
+		r[register[1]] = value & 0xFF
+
+		cycles=2; pc+=1
+
+	elif opcode & 0b11001111 == 0b00001011:
+		register = pairMap[(opcode&0b00110000)>>4]
+		value = ((r[register[0]] << 8)  | r[register[1]]) - 1
+
+		r[register[0]] = value >> 8
+		r[register[1]] = value & 0xFF
+		cycles=2; pc+=1
+
+	# Rotate Shift Operations
+	elif opcode == 0b00000111:
+		setflag(3, r["a"][0])
+
+		r["a"] = r["a"] << 1
+		setflag(0, r["a"] == 0)
+
+		cycles=1; pc+=1
+
+	elif opcode == 0b00010111:
+		r["a"] = r["a"] << 1
+
+		setflag(3, r["a"][0])
+		setflag(0, r["a"] == 0)
+
+		cycles=1; pc+=1
+
+	elif opcode == 0b00001111:
+		setflag(3, r["a"][7])
+		
+		r["a"] = r["a"] >> 1
+		setflag(0, r["a"] == 0)
+
+		cycles=1; pc+=1
+
+	elif opcode == 0b00011111:
+		r["a"] = r["a"] >> 1
+
+		setflag(3, r["a"][7])
+		setflag(0, r["a"] == 0)
+
+		cycles=1; pc+=1
+
+	# Bit Operations
 	
-
-	
-
 
 	""" When interrupts need to be checked """
 	if clock <= 0:
