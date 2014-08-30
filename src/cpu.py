@@ -363,7 +363,62 @@ while running:
 		cycles=1; pc+=1
 
 	# Bit Operations
-	
+	elif opcode == 0b11001011:
+		# Multiple commands for this opcode
+		nextop = read(pc+1)
+		cycles = 0 
+
+		if nextop & 0b11000000 == 0b01000000:
+			bit = (nextop&0b00111000) >> 3
+			if nextop & 0b00000111 == 0b110:
+				setflag(0, (read((r["h"]<<8)|r["l"])&(0b1<<bit)))
+				cycles = 3
+			else:
+				setflag(0, r[byteRegMap[nextop&0b00000111]]&(0b1<<bit))
+				cycles = 2
+
+			setflag(1, 0)
+			setflag(2, 1)
+
+		elif nextop & 0b11000000 == 0b11000000:
+			bit = (nextop&0b00111000) >> 3
+			if nextop & 0b00000111 == 0b110:
+				result = ((r["h"]<<8) | r["l"]) | (0b1<<bit)
+
+				r["h"] = result >> 8
+				r["l"] = result & 0x00FF
+
+				cycles = 4
+
+			else:
+				r[byteRegMap[nextop&0b00000111]] |= 0b1 << bit
+
+				cycles = 2
+
+		elif nextop & 0b11000000 == 0b10000000:
+			bit = (nextop&0b00111000) >> 3
+			if nextop & 0b00000111 == 0b110:
+				result = ((r["h"]<<8) | r["l"]) ^ (0b1 << bit)
+
+				r["h"] = result >> 8
+				r["l"] = result & 0x00FF
+
+				cycles = 4
+			else:
+				r[byteRegMap[nextop&0b00000111]] ^= 0b1 << bit#
+				cycles = 2
+
+		pc+=2
+
+	# Function Jump Operations
+	elif opcode == 0b11000011:
+		n1 = read(pc+1)
+		n2 = read(pc+2)
+
+		pc = (n1 << 8) | n2
+
+		cycles = 4; pc+=3
+
 
 	""" When interrupts need to be checked """
 	if clock <= 0:
