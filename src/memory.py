@@ -1,13 +1,10 @@
-import struct
-
 """ 
 Memory Map
 ------------
 """
 
-bios_use = True
-
-bios = [0x31, 0xfe, 0xff, 0xaf, 0x21, 0xff, 0x9f, 0x32, 0xcb, 
+class MemoryController(object):
+	bios = [0x31, 0xfe, 0xff, 0xaf, 0x21, 0xff, 0x9f, 0x32, 0xcb, 
 		0x7c, 0x20, 0xfb, 0x21, 0x26, 0xff, 0x0e, 0x11, 0x3e, 
 		0x80, 0x32, 0xe2, 0x0c, 0x3e, 0xf3, 0xe2, 0x32, 0x3e, 
 		0x77, 0x77, 0x3e, 0xfc, 0xe0, 0x47, 0x11, 0x04, 0x01, 
@@ -37,70 +34,76 @@ bios = [0x31, 0xfe, 0xff, 0xaf, 0x21, 0xff, 0x9f, 0x32, 0xcb,
 		0x78, 0x86, 0x23, 0x05, 0x20, 0xfb, 0x86, 0x20, 0xfe, 
 		0x3e, 0x01, 0xe0, 0x50]
 
-rom = bytearray(0x8000) # 0x0000 - 0x8000
-vram = bytearray(0xA000-0x8000) # 0x8000 - 0xA000
-eram = bytearray(0xC000-0xA000) # 0xA000 - 0xC000
-wram = bytearray(0xE000-0xC000) # 0xC000 - 0xE000 Echoed to: 0xE000 - 0xFE00
-oam = bytearray(0xFEA0-0xFE00) # 0xFE00 - 0xFEA0
-# 0xFEA0 - 0xFF00 Unused
-io = bytearray(0xFF4C-0xFF00) # 0xFF00- 0xFF4C
-# 0xFF4C - 0xFF80 is empty
-ram = bytearray(0xFFFF - 0xFF80) # 0xFF80 - 0xFFFF
 
-def read(loc):
-	# At the start of the emulation the bios is in use
-	if bios_use:
-		if (loc-0x100) >= len(bios)-1:
-			bios_use = False
+	def __init__(self):
+		self.currBank = 1
+		self.bios_use = True
 
-		return bios[loc-0x100]
+		self.rom = bytearray(0x8000) # 0x0000 - 0x8000
+		self.vram = bytearray(0xA000-0x8000) # 0x8000 - 0xA000
+		self.eram = bytearray(0xC000-0xA000) # 0xA000 - 0xC000
+		self.wram = bytearray(0xE000-0xC000) # 0xC000 - 0xE000 Echoed to: 0xE000 - 0xFE00
+		self.oam = bytearray(0xFEA0-0xFE00) # 0xFE00 - 0xFEA0
+		# 0xFEA0 - 0xFF00 Unused
+		self.io = bytearray(0xFF4C-0xFF00) # 0xFF00- 0xFF4C
+		# 0xFF4C - 0xFF80 is empty
+		self.ram = bytearray(0xFFFF-0xFF80) # 0xFF80 - 0xFFFF
 
-	if loc < 0x8000:
-		return rom[loc]
-	elif loc < 0xA000:
-		return vram[loc-0x8000]
-	elif loc < 0xC000:
-		return eram[loc-0xA000]
-	elif loc < 0xE000:
-		return wram[loc-0xC000]
-	elif loc < 0xFE00:
-		return wram[loc-0xE000]
-	elif loc < 0xFEA0:
-		return oam[loc-0xFE00]
-	elif loc < 0xFF4C:
-		return io[loc-0xFF00]
-	elif loc < 0xFFFF:
-		return ram[loc-0xFF80]
+	def read(self, loc):
+		# At the start of the emulation the bios is in use
+		if self.bios_use:
+			if (loc-0x100) >= len(MemoryController.bios)-1:
+				self.bios_use = False
 
-	return 0
+			return MemoryController.bios[loc-0x100]
+		if loc < 0x4000:
+			return self.rom[loc]
+		elif loc < 0x8000:
+			return self.rom[0x4000*currBank + (loc - 0x4000)]
+		elif loc < 0xA000:
+			return self.vram[loc-0x8000]
+		elif loc < 0xC000:
+			return self.eram[loc-0xA000]
+		elif loc < 0xE000:
+			return self.wram[loc-0xC000]
+		elif loc < 0xFE00:
+			return self.wram[loc-0xE000]
+		elif loc < 0xFEA0:
+			return self.oam[loc-0xFE00]
+		elif loc < 0xFF4C:
+			return self.io[loc-0xFF00]
+		elif loc < 0xFFFF:
+			return self.ram[loc-0xFF80]
 
-def write(loc, data):
-	if loc < 0x8000:
-		rom[loc] = data
-	elif loc < 0xA000:
-		vram[loc-0x8000] = data
-	elif loc < 0xC000:
-		eram[loc-0xA000] = data
-	elif loc < 0xE000:
-		wram[loc-0xC000] = data
-	elif loc < 0xFE00:
-		wram[loc-0xE000] = data
-	elif loc < 0xFEA0:
-		oam[loc-0xFE00] = data
-	elif loc < 0xFF4C:
-		io[loc-0xFF00] = data
-	elif loc < 0xFFFF:
-		ram[loc-0xFF80] = data
+		return 0
 
-def readROM(rom):
-	# Put the ROM into memory
-	stream = open(rom, "rb")
+	def write(self, loc, data):
+		if loc >= 0x2000 and loc <= 0x4000:
+			self.currBank = data
+		elif loc < 0x8000:
+			self.rom[loc] = data
+		elif loc < 0xA000:
+			self.vram[loc-0x8000] = data
+		elif loc < 0xC000:
+			self.eram[loc-0xA000] = data
+		elif loc < 0xE000:
+			self.wram[loc-0xC000] = data
+		elif loc < 0xFE00:
+			self.wram[loc-0xE000] = data
+		elif loc < 0xFEA0:
+			self.oam[loc-0xFE00] = data
+		elif loc < 0xFF4C:
+			self.io[loc-0xFF00] = data
+		elif loc < 0xFFFF:
+			self.ram[loc-0xFF80] = data
 
-	romArray = bytearray(stream.read())
-	stream.close()
+	def readROM(self, rom):
+		# Put the ROM into memory
+		stream = open(rom, "rb")
 
-	# Place this in memory
-	rom = romArray
+		romArray = bytearray(stream.read())
+		stream.close()
 
-	
-	
+		# Place this in memory
+		self.rom = romArray
+
