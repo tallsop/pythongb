@@ -14,22 +14,18 @@ C - Carry flag - 3
 """
 
 class CPU(object):
-	# Bytes in opcode which refer to register
-	byteRegMap = { 0b111:"a", 0b000:"b", 0b001:"c", 0b010:"d", 0b011:"e", 0b100:"h", 0b101:"l" }
+	""" Function caller dictionary:
+		This maps a hex int to an array, first entry being the function name, followed
+		by the array of parameters """
 
-	pairMap = { 0b00:"bc", 0b01:"de", 0b10:"hl", 0b11:"sp" }
+	""" The OpcodeMap maps integers to a tuple of a function and a function paramater list """
+	opmap = {
+		0b0:(halt, [])
+	}
 
-	# Refers to values you can place in setflag function
-	flagMap = { 0b00:[0,0], 0b01:[0,1], 0b10:[3,0], 0b11:[3,0] }
-
-	# Refers to value in the RST t function
-	tMap = { 0:0x00, 1:0x08, 2:0x10, 3:0x18, 4:0x20, 5:0x28, 6:0x30, 7:0x38 }
-
-	# All values are set to their initial values upon the systems startup
 	def __init__(self, memController):
-		self.clock = 0
-		self.pc = 0x100
-		self.r = { "a":0,"b":0,"c":0,"d":0,"e":0,"f":0,"h":0,"l":0,
+		# All values are set to their initial values upon the systems startup
+		self.r = { "a":0,"b":0,"c":0,"d":0red,"e":0,"f":0,"h":0,"l":0, "pc":0x100
 		"sp":0xFFFE, "ime":1 }
 
 		self.memory = memController
@@ -45,534 +41,587 @@ class CPU(object):
 	def getflag(self, n):
 		return self.r["f"][n]
 
-	def add(self,a,b):
-		res = a + b
+	def execute(self, pc):
+		opcode = CPU.opmap[memController.read(pc)]
+		opcode[0](*opcode[1]) # Execute the opcode
+
+	# All opcode functions below
+
+	# 8-Bit Transfer Function
+	def ldr(self, r1, r2):
+		self.r[r1] = self.r[r2]
+		self.r["pc"]+=1
+
+	def ldn(self, r):
+		self.r[r] = read(self.r["pc"]+1)
+		self.r["pc"]+=2
+
+	def ldhl(self, r):
+		self.r[r] = read((self.r["h"]<<8)|r["l"])
+		self.r["pc"]+=1
+
+	def ldhln(self):
+		write((self.r["h"]<<8)|self.r["l"], read(self.r["pc"]+1))
+		self.r["pc"]+=2
+
+	def ldbc(self):
+		self.r["a"] = read((self.r["b"]<<8)|r["c"])
+		self.r["pc"]+=1
+
+	def ldde(self):
+		self.r["a"] = read((self.r["d"]<<8)|r["e"])
+		self.r["pc"]+=1
+
+	def ldc(self):
+		self.r["a"] = read(0xFF00 | self.r["c"])
+		self.r["pc"]+=1
+
+	def lcrc(self):
+		write(0xFF00 | r["c"], self.r["a"])
+		self.r["pc"]+=1
+
+	def ldan(self):
+		self.r["a"] = read(self.r["pc"]+1)
+		self.r["pc"]+=2
+
+	def ldna(self):
+		write(read(self.r["pc"]+1), self.r["a"])
+		self.r["pc"]+=2
+
+	def ldann(self):
+		n1 = read(self.r["pc"]+1) << 8
+		n2 = read(self.r["pc"]+2)
+
+		self.r["a"] = read(n1|n2)
+		self.r["pc"]+=3
+
+	def ldnna(self):
+		n1 = read(self.r["pc"]+1) << 8
+		n2 = read(self.r["pc"]+2)
+
+		write(n1|n2, self.r["a"])
+		self.r["pc"]+=3
+
+	def ldahli(self):
+		hl = (self.r["h"]<<8)|self.r["l"])
+		self.r["a"] = hl
+		hl += 1
+
+		self.r["h"] = hl >> 8; self.r["l"] = jl & 0xFF
+
+		self.r["pc"]+=1
+
+	def ldahld(self):
+		hl = (self.r["h"]<<8)|self.r["l"])
+		self.r["a"] = hl
+		hl -= 1
+
+		self.r["h"] = hl >> 8; self.r["l"] = jl & 0xFF
+
+		self.r["pc"]+=1
+
+	def ldbca(self):
+		write((self.r["b"]<<8)|self.r["c"], self.r["a"])
+		self.r["pc"]+=1
+
+	def lddea(self):
+		write((self.r["d"]<<8)|self.r["e"], self.r["a"])
+		self.r["pc"]+=1
+
+	def ldhlia(self):
+		hl = (self.r["h"]<<8)|self.r["l"])
+		write(hl, self.r["a"])
+		hl += 1
+
+		self.r["h"] = hl >> 8; self.r["l"] = jl & 0xFF
+
+		self.r["pc"]+=1
+
+	def ldhlda(self):
+		hl = (self.r["h"]<<8)|self.r["l"])
+		write(hl, self.r["a"])
+		hl -= 1
+
+		self.r["h"] = hl >> 8; self.r["l"] = jl & 0xFF
+
+		self.r["pc"]+=1
+
+	def ldddnn(self, d1, d2):
+		self.r[d1] = read(r["pc"]+1)
+		self.r[d2] = read(r["pc"]+2)
+
+		self.r["pc"]+=3
+
+	def ldsphl(self):
+		self.r["sp"] = (self.r["h"]<<8)|self.r["l"]
+		self.r["pc"]+=1
+
+	def pushqq(self, q1, q2):
+		write(self.r["sp"]-1, self.r[q1])
+		write(self.r["sp"]-2, self.r[q2])
+
+		self.r["sp"] -= 2
+		self.r["pc"] += 1
+
+	def popqq(self, q1, q2):
+		self.r[q1] = read(self.r["sp"])
+		self.r[q2] = read(self.r["sp"]+1)
+
+		self.r["sp"] += 2
+		self.r["pc"] += 1
+
+	def ldhlspe(self):
+		e = read(self.r["pc"]+1)
+
+		if e & 0x80:
+			e -= 0x100
+
+		hl = self.r["sp"] + e
+
+		if e >= 0:
+			setflag(2, ((self.r["sp"] & 0xF) + (e & 0xF)) > 0xF)
+			setflag(3, ((self.r["sp"] & 0xFF) + e) > 0xFF)
+		else:
+			setflag(2, (self.r["sp"] & 0xFF) <= (hl & 0xFF))
+			setflag(3, (self.r["sp"] & 0xF) <= (hl & 0xF))
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xF
+
+	def ldnnsp(self):
+		nn = (read(self.r["pc"]+1)<<8) | read(self.r["pc"]+2)
+		write(nn, self.r["sp"]&0xFF)
+		write(nn+1, self.r["sp"]>>8)
+
+		self.r["pc"]+=3
+
+	def add(self, val, pc):
+		temp = self.r["a"]
+		self.r["a"] += val
 
 		# Set if zero
-		setflag(0, res == 0)
+		setflag(0, self.r["a"] == 0)
 		# Reset subtration bit
 		setflag(1, 0)
 		# Check for carry from 4th to 5th bit
-		setflag(2, ((a&0xF)+(b&0xF) > 0xF))
+		setflag(2, ((temp&0xF)+(val&0xF) > 0xF))
 		# Check for overflow
-		setflag(3, res > 0xFF)
-
-		return res
-
-	def execute(self):
-		cycles = 0
-
-		opcode = self.memory.read(self.pc)
-
-		""" 
-		Here is where opcodes are executed in the order of the Game Boy manual with exceptions where
-		the masking of an opcode causes the wrong one to be executed, in these cases, the exact opcode
-		copy is placed above the one which is causing problems.
-		"""
-		if opcode & 0b11000000 == 0b01000000:
-			t = opcode & 0b00111111
-			self.r[CPU.byteRegMap[t>>3]] = self.r[CPU.byteRegMap[t&0b00000111]]
-			self.pc+=1; cycles=1
-
-		elif opcode & 0b11000111 == 0b00000110:
-			t = self.memory.read(self.pc+1)
-			self.r[CPU.byteRegMap[(opcode&0b00111000)>>3]] = t
-			self.pc+=2; cycles=2
-
-		elif opcode & 0b11000111 == 0b01000110:
-			self.r[CPU.byteRegMap[(opcode&0b00111000)>>3]] = read((self.r["h"] << 8) | self.r["l"])
-			self.pc+=1; cycles=2
-
-		elif opcode & 0b11111000 == 0b01110000:
-			t = h[CPU.byteRegMap[opcode&0b00000111]]
-			self.memory.write((self.r["h"] << 8) | self.r["l"], t)
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b00110110:
-			n = self.memory.read(self.pc+1)
-			self.memory.write((self.r["h"] << 8) | self.r["l"], n)
-			self.pc+=2; cycles=3
-
-		elif opcode == 0b00001010:
-			self.r["a"] = read((self.r["b"] << 8) | self.r["c"])
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b00011010:
-			self.r["a"] = read((self.r["d"] << 8) | self.r["e"])
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b11110010:
-			self.r["a"] = self.memory.read(0xFF00 + self.r["c"])
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b11100010:
-			self.memory.write(0xFF00 + self.r["c"], self.r["a"])
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b11110000:
-			n = self.memory.read(self.pc+1)
-			self.r["a"] = self.memory.read(n)
-			self.pc+=2; cycles=3
-
-		elif opcode == 0b11100000:
-			n = self.memory.read(self.pc+1)
-			self.memory.write(n, self.r["a"])
-			self.pc+=2; cycles=3
-
-		elif opcode == 0b11111010:
-			n1 = self.memory.read(self.pc+1)
-			n2 = self.memory.read(self.pc+2)
-			self.r["a"]= self.memory.read(n1 << 8 | n2)
-			self.pc+=3; cycles=4
-
-		elif opcode == 0b11101010:
-			n1 = self.memory.read(self.pc+1)
-			n2 = self.memory.read(self.pc+2)
-			self.memory.write((n1 << 8) | n2, self.r["a"])
-			self.pc+=3; cycles=4
-
-		elif opcode == 0b00101010:
-			t = (self.r["h"] << 8) | self.r["l"]
-			self.r["a"] = self.memory.read(t)
-			t += 1
-			self.r["h"]=t>>8
-			self.r["l"]=t&0x00FF
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b00111010:
-			t = (self.r["h"] << 8) | self.r["l"]
-			self.r["a"] = self.memory.read(t)
-			t -= 1
-			self.r["h"]=t>>8
-			self.r["l"]=t&0x00FF
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b00000010:
-			self.memory.write((self.r["b"]<<8)|self.r["c"], self.r["a"])
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b00010010:
-			self.memory.write((self.r["d"]<<8)|self.r["e"], self.r["a"])
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b00100010:
-			t = (self.r["h"] << 8) | self.r["l"]
-			self.memory.write(t, self.r["a"])
-			t+=1
-			self.r["h"]=t>>8
-			self.r["l"]=t&0x00FF
-			self.pc+=1; cycles=2
-
-		elif opcode == 0b00110010:
-			t = (self.r["h"] << 8) | self.r["l"]
-			self.memory.write(t, self.r["a"])
-			t-=1
-			self.r["h"]=t>>8
-			self.r["l"]=t&0x00FF
-			self.pc+=1; cycles=2
-
-		elif opcode & 0b11001111 == 0b00000001:
-			n1 = self.memory.read(self.pc+1)
-			n2 = self.memory.read(self.pc+2)
-			dd = CPU.pairMap[(opcode&0b00110000) >> 4]
-
-			self.r[dd[0]] = n1
-			self.r[dd[1]] = n2
-
-			self.pc+=3; cycles=3
-
-		elif opcode == 0b11111001:
-			self.r["sp"] = (self.r["h"] << 8) | self.r["l"]
-			self.pc+=1; cycles=2
-
-		elif opcode & 0b11001111 == 0b11000101:
-			dd = CPU.pairMap[(opcode&0b00110000) >> 4]
-			self.memory.write(self.r["sp"]-1, self.r[dd[0]])
-			self.memory.write(self.r["sp"]-2, self.r[dd[1]])
-			self.r["sp"]-=2
-			self.pc+=1; cycles=4
-
-		elif opcode & 0b11001111 == 0b110000001:
-			dd = CPU.pairMap[(opcode&0b00110000) >> 4]
-			self.r[dd[1]] = self.r["sp"]-1
-			self.r[dd[0]] = self.r["sp"]-2
-			self.r["ps"]+=2
-			self.pc+=1; cycles=3
-
-		elif opcode == 0b11111000:
-			e = self.memory.read(self.pc+1) #2's complement
-			temp = self.r["sp"]
-			if e & 0x80:
-				e = e - 0x100
-
-			val = self.r["sp"] + e
-
-			self.r["h"] = val >> 8
-			self.r["l"] = val & 0xFF
-
-			""" Code below is found here: http://stackoverflow.com/questions/5159603/gbz80-how-does-ld-hl-spe-affect-h-and-c-flags
-				It is an answer suggested by Fascia. """
-
-			if e >= 0:
-				setflag(2, ((self.r["sp"] & 0xF) + (e & 0xF)) > 0xF)
-				setflag(3, ((self.r["sp"] & 0xFF) + e) > 0xFF)
-			else:
-				setflag(2, (temp & 0xF) <= (self.r["sp"] & 0xF))
-				setflag(3, (temp & 0xFF) <= (self.r["sp"] & 0xFF))
-
-			cycles=3; self.pc+=2
-
-		elif opcode == 0b00001000:
-			self.memory.write(self.r["sp"]&0xFF, self.pc+1)
-			self.memory.write(self.r["sp"]>>8, self.pc+2)
-			cycles=5; self.pc+=3
-
-		elif opcode & 0b11111000 == 0b10000000:
-			self.r["a"] = add(self.r["a"], CPU.byteRegMap[opcode&0b00000111])
-			cycles=1; self.pc+=1
-
-		elif opcode == 0b11000110:
-			self.r["a"] = add(self.r["a"], self.memory.read(self.pc+1))
-			cycles=2; self.pc+=2
-
-		elif opcode == 0b10000110:
-			self.r["a"] = add(self.r["a"], read((self.r["h"]<<8) | self.r["l"]))
-			cycles=2; self.pc+=1
-
-		elif opcode & 0b11000111 == 0b00000100:
-			old = self.r[CPU.byteRegMap[(opcode&0b00111000)>>3]]
-			result = old + 1
-			setflag(0, result == 0)
-			setflag(1, 0)
-			setflag(2, ((old&0xF) + 1) > 0xF)
-			
-			self.r[CPU.byteRegMap[(opcode&0b00111000)>>3]]=result
-			cycles=1; self.pc+=1
-
-		elif opcode == 0b00110100:
-			old = read((self.r["h"]<<8)|self.r["l"])
-			result = old + 1
-			setflag(0, result == 0)
-			setflag(1, 0)
-			setflag(2, ((old&0xF) + 1) > 0xF)
-
-			self.memory.write((self.r["h"]<<8)|self.r["l"], result)
-			cycles=3; self.pc+=1
-
-		elif opcode & 0b11000111 == 0b00000101:
-			old = self.r[CPU.byteRegMap[(opcode&0b00111000)>>3]]
-			result = old - 1
-			setflag(0, result == 0)
-			setflag(1, 1)
-			setflag(2, ((old&0xF) - 1) > 0xF)
-
-			self.r[CPU.byteRegMap[(opcode&0b00111000)>>3]]=result
-			cycles=1; self.pc+=1
-
-		elif opcode == 0b00110101:
-			old = read((self.r["h"]<<8)|self.r["l"])
-			result = old - 1
-			setflag(0, result == 0)
-			setflag(1, 1)
-			setflag(2, ((old&0xF) - 1) > 0xF)
-
-			self.memory.write((self.r["h"]<<8)|self.r["l"], result)
-			cycles=3; self.pc+=1
-
-		# 16 Bit Artimetic Operations
-
-		elif opcode & 0b11001111 == 0b00001001:
-			register = CPU.pairMap[(opcode&0b00110000)>>4]
-			value = (registeself.r[0] << 8) | registeself.r[1]
-			reg = self.r["h"] << 8 | self.r["l"]
-			
-			setflag(1, 0)
-			setflag(2, (value&0xF) + (reg*0xF) > 0xF)
-			setflag(3, value + reg > 0xFF)
-
-			reg += value
-			cycles=2; self.pc+=1
-
-		elif opcode == 0b11101000:
-			e = self.memory.read(self.pc+1) #2's complement
-			temp = self.r["sp"]
-			if e & 0x80:
-				e = e - 0x100
-
-			self.r["sp"]+=e
-
-			""" Code below is found here: http://stackoverflow.com/questions/5159603/gbz80-how-does-ld-hl-spe-affect-h-and-c-flags
-				It is an answer suggested by Fascia. """
-
-			if e >= 0:
-				setflag(2, ((self.r["sp"] & 0xF) + (e & 0xF)) > 0xF)
-				setflag(3, ((self.r["sp"] & 0xFF) + e) > 0xFF)
-			else:
-				setflag(2, (temp & 0xF) <= (self.r["sp"] & 0xF))
-				setflag(3, (temp & 0xFF) <= (self.r["sp"] & 0xFF))
-
-			cycles=4; self.pc+=2
-
-		elif opcode & 0b11001111 == 0b00000011:
-			register = CPU.pairMap[(opcode&0b00110000)>>4]
-			value = ((self.r[registeself.r[0]] << 8)  | self.r[registeself.r[1]]) + 1
-
-			self.r[registeself.r[0]] = value >> 8
-			self.r[registeself.r[1]] = value & 0xFF
-
-			cycles=2; self.pc+=1
-
-		elif opcode & 0b11001111 == 0b00001011:
-			register = CPU.pairMap[(opcode&0b00110000)>>4]
-			value = ((self.r[registeself.r[0]] << 8)  | self.r[registeself.r[1]]) - 1
-
-			self.r[registeself.r[0]] = value >> 8
-			self.r[registeself.r[1]] = value & 0xFF
-			cycles=2; self.pc+=1
-
-		# Rotate Shift Operations
-		elif opcode == 0b00000111:
-			setflag(3, self.r["a"][0])
-
-			self.r["a"] = self.r["a"] << 1
-			setflag(0, self.r["a"] == 0)
-
-			cycles=1; self.pc+=1
-
-		elif opcode == 0b00010111:
-			self.r["a"] = self.r["a"] << 1
-
-			setflag(3, self.r["a"][0])
-			setflag(0, self.r["a"] == 0)
-
-			cycles=1; self.pc+=1
-
-		elif opcode == 0b00001111:
-			setflag(3, self.r["a"][7])
-			
-			self.r["a"] = self.r["a"] >> 1
-			setflag(0, self.r["a"] == 0)
-
-			cycles=1; self.pc+=1
-
-		elif opcode == 0b00011111:
-			self.r["a"] = self.r["a"] >> 1
-
-			setflag(3, self.r["a"][7])
-			setflag(0, self.r["a"] == 0)
-
-			cycles=1; self.pc+=1
-
-		# Bit Operations
-		elif opcode == 0b11001011:
-			# Multiple commands for this opcode
-			nextop = self.memory.read(self.pc+1)
-			cycles = 0 
-
-			if nextop & 0b11000000 == 0b01000000:
-				bit = (nextop&0b00111000) >> 3
-				if nextop & 0b00000111 == 0b110:
-					setflag(0, (read((self.r["h"]<<8)|self.r["l"])&(0b1<<bit)))
-					cycles = 3
-				else:
-					setflag(0, self.r[CPU.byteRegMap[nextop&0b00000111]]&(0b1<<bit))
-					cycles = 2
-
-				setflag(1, 0)
-				setflag(2, 1)
-
-			elif nextop & 0b11000000 == 0b11000000:
-				bit = (nextop&0b00111000) >> 3
-				if nextop & 0b00000111 == 0b110:
-					result = ((self.r["h"]<<8) | self.r["l"]) | (0b1<<bit)
-
-					self.r["h"] = result >> 8
-					self.r["l"] = result & 0x00FF
-
-					cycles = 4
-
-				else:
-					self.r[CPU.byteRegMap[nextop&0b00000111]] |= 0b1 << bit
-
-					cycles = 2
-
-			elif nextop & 0b11000000 == 0b10000000:
-				bit = (nextop&0b00111000) >> 3
-				if nextop & 0b00000111 == 0b110:
-					result = ((self.r["h"]<<8) | self.r["l"]) ^ (0b1 << bit)
-
-					self.r["h"] = result >> 8
-					self.r["l"] = result & 0x00FF
-
-					cycles = 4
-				else:
-					self.r[CPU.byteRegMap[nextop&0b00000111]] ^= 0b1 << bit
-					cycles = 2
-
-				self.pc+=2
-
-		# Function Jump Operations
-		elif opcode == 0b11000011:
-			n1 = self.memory.read(self.pc+1)
-			n2 = self.memory.read(self.pc+2)
-
-			self.pc = (n1 << 8) | n2
-
-			cycles = 4
-
-		elif opcode & 0b11100111 == 0b11000010:
-			flag = CPU.flagMap[(opcode&0b00011000)>>3]
-
-			if getflag(flag[0]) == flag[1]:
-				n1 = self.memory.read(self.pc+1)
-				n2 = self.memory.read(self.pc+2)
-				self.pc = (n1 << 8) | n2
-				cycles = 4
-			else:
-				cycles = 3
-				self.pc+=3
-
-		elif opcode == 0b00011000:
-			e = self.memory.read(self.pc+1)
-			if e & 0x80:
-				e = e - 0x100
-
-			self.pc += e
-
-			cycles=3
-
-		elif opcode & 0b11100111 == 0b00100000:
-			flag = CPU.flagMap[(opcode&0b00011000)>>3]
-
-			if getflag(flag[0]) == flag[1]:
-				e = self.memory.read(self.pc+1)
-				if e & 0x80:
-					e = e - 0x100
-
-				self.pc += e
-				cycles = 4
-			else:
-				self.pc+=2
-				cycles = 3
-
-		elif opcode == 0b11101001:
-			self.pc = (self.r["h"]<<8)|self.r["l"]
-			cycles=1
-
-		# Call/Return Instructions	
-		elif opcode == 0b11000011:
-			self.memory.write(self.r["sp"]-1, self.pc>>8)
-			self.memory.write(self.r["sp"]-2, self.pc&0xFF)
+		setflag(3, self.r["a"] > 0xFF)
 
-			n1 = self.memory.read(self.pc+1)
-			n2 = self.memory.read(self.pc+2)
-
-			self.pc = (n1 << 8) | n2
-
-			self.r["sp"] -= 2
+		self.r["pc"] += pc
 
-			cycles=6
-
-		elif opcode & 0b11100111 == 0b11000100:
-			flag = CPU.flagMap[(opcode&0b00011000)>>3]
+	def adc(self, var, pc):
+		temp = self.r["a"]
+		self.r["a"] += val + getflag(3)
 
-			if getflag(flag[0]) == flag[1]:
-				self.memory.write(self.r["sp"]-1, self.pc>>8)
-				self.memory.write(self.r["sp"]-2, self.pc&0xFF)
+		# Set if zero
+		setflag(0, self.r["a"] == 0)
+		# Reset subtration bit
+		setflag(1, 0)
+		# Check for carry from 4th to 5th bit
+		setflag(2, ((temp&0xF)+(val&0xF)+getflag(3) > 0xF))
+		# Check for overflow
+		setflag(3, self.r["a"] > 0xFF)
 
-				n1 = self.memory.read(self.pc+1)
-				n2 = self.memory.read(self.pc+2)
+		self.r["pc"] += pc
 
-				self.pc = (n1 << 8) | n2
+	def sub(self, val, pc):
+		temp = self.r["a"]
+		self.r["a"] -= val
 
-				self.r["sp"] -= 2
+		# Set if zero
+		setflag(0, self.r["a"] == 0)
+		# Reset subtration bit
+		setflag(1, 0)
 
-				cycles=6
-			else:
-				cycles=3
-				self.pc+=1
+		setflag(2, (self.r["a"] & 0xF) <= (temp & 0xF))
 
-		elif opcode == 0b11001001 or opcode == 0b11011001:
-			sp1 = self.memory.read(self.r["sp"])
-			sp2 = self.memory.read(self.r["sp"]+1)
+		setflag(3, (self.r["a"] & 0xFF) <= (temp & 0xFF))
 
-			self.r["ime"] = 0
-			if opcode == 0b11011001:
-				self.r["ime"] = 1
+		self.r["pc"] += pc
 
-			self.pc = (sp2 << 8) | sp1
-			self.r["sp"] += 2
-			cycles = 4
-			
-		elif opcode & 0b11100111 == 0b11000000:
-			flag = CPU.flagMap[(opcode&0b00011000)>>3]
-			if getflag(flag[0]) == flag[1]:
-				sp1 = self.memory.read(self.r["sp"])
-				sp2 = self.memory.read(self.r["sp"]+1)
+	def subc(self, var, pc):
+		temp = self.r["a"]
+		self.r["a"] -= (val-getflag(3))
 
-				self.pc = (sp2 << 8) | sp1
-				self.r["sp"] += 2
-				cycles = 5
-			else:
-				cycles = 2
+		# Set if zero
+		setflag(0, self.r["a"] == 0)
+		# Reset subtration bit
+		setflag(1, 0)
 
-		elif opcode & 0b11000111 == 0b11000111:
-			value = CPU.tMap[(opcode&0b00111000)>>3]
+		setflag(2, (self.r["a"] & 0xF) <= (temp & 0xF))
 
-			self.pc = value
+		setflag(3, (self.r["a"] & 0xFF) <= (temp & 0xFF))
 
-			cycles = 4
+		self.r["pc"] += pc
 
-		# General Purpose Instructions
-		elif opcode == 0b00100111:
-			# Don't care at this point
-			cycles = 1; self.pc+=1
+	def gband(self, var, pc):
+		self.r["a"] &= var
 
-		elif opcode == 0b00101111:
-			self.r["a"] ^= 0xFF
-			cycles = 1; self.pc+=1 
+		setflag(0, self.r["a"] == 0)
+		setflag(1, 0)
+		setflag(2, 1)
+		setflag(3, 0)
 
-		elif opcode == 0b00000000:
-			cycles=1; self.pc+=1
+		self.r["pc"] += pc
 
-		elif opcode == 0b00111111:
-			setflag(1, 1)
-			setflag(2, 1)
-			setflag(3, getflag(3)^1)
+	def gbor(self, var, pc):
+		self.r["a"] |= var
 
-			cycles=1; self.pc+=1
+		setflag(0, self.r["a"] == 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, 0)
 
-		elif opcode == 0b00110111:
-			setflag(1, 1)
-			setflag(2, 1)
-			setflag(3, 1)
+		self.r["pc"] += pc
 
-			cycles=1; self.pc+=1
+	def xor(self, var, pc):
+		self.r["a"] ^= var
 
-		elif opcode == 0b11110011:
-			self.r["ime"] = 0
-			cycles = 1; self.pc+=1
+		setflag(0, self.r["a"] == 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, 0)
 
-		elif opcode == 0b11111011:
-			self.r["ime"] = 1
-			cycles = 1; self.pc+=1
+		self.r["pc"] += pc
 
-		elif opcode == 0b01110110:
-			cycles=1; self.pc+=1
+	def cpn(self, var, pc):
+		setflag(0, self.r["a"] == var)
+		setflag(1, 1)
+		setflag(2, (self.r["a"] & 0xF) <= (var & 0xF))
+		setflag(3, self.r["a"] < var)
 
-		elif opcode == 0b00010000:
-			exit()
+		self.r["pc"] += pc
 
-		else:
-			print("Executed Illegal Opcode: ")
-			print(hex(opcode))
+	def inc(self, r):
+		self.r[r] += 1
+		setflag(0, self.r["a"] == 0)
+		setflag(1, 0)
+		setflag(2, ((self.r[r]-1) & 0xF) + 1 > 0xF)
 
-			print("Terminating...")
-			exit()
+		self.r["pc"] += 1
 
-		print("Opcode Executed:")
-		print(bin(opcode))
+	def inchl(self):
+		hl = (self.r["h"]<<8)|self.r["l"]
 
+		hl += 1
 
-		self.clock += cycles
+		setflag(0, hl == 0)
+		setflag(1, 0)
+		setflag(2, ((hl-1) & 0xF) + 1 > 0xF)
 
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xF
+
+		self.r["pc"] += 1
+
+	def dec(self, r):
+		self.r[r] -= 1
+		setflag(0, self.r["a"] == 0)
+		setflag(1, 1)
+		setflag(2, ((self.r[r]+1) & 0xF) - 1 > 0xF)
+
+		self.r["pc"] += 1
+
+	def dechl(self):
+		hl = (self.r["h"]<<8)|self.r["l"]
+
+		hl -= 1
+
+		setflag(0, hl == 0)
+		setflag(1, 1)
+		setflag(2, ((hl+1) & 0xF) - 1 > 0xF)
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xF
+
+		self.r["pc"] += 1
+
+	def addhlss(self, a, b):
+		hl = (self.r["h"] << 8) | self.r["l"]
+		reg = (self.r[a] << 8) | self.r[b]
+
+		setflag(1, 0)
+		setflag(2, (hl&0xF) + (reg&0xF) > 0xF)
+		setflag(3, (hl&0XFF) + (reg&0xFF) > 0xFF)
+
+		hl += reg
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xFF
+
+		self.r["pc"] += 1
+
+	def addspe(self):
+		e = read(self.r["pc"]+1)
+
+		# First bit is set
+		if e & 0x80:
+			e -= 0x100
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, (self.r["sp"]&0xF) + e & 0xF > 0xF)
+		setflag(3, (self.r["sp"]&0xFF) + e > 0xFF)
+
+		self.r["sp"] += e
+
+		self.r["pc"] += 2
+
+	def incss(self, a, b):
+		reg = (self.[a] << 8) | self.r[b]
+
+		reg += 1
+
+		self.r[a] = reg >> 8
+		self.r[b] = reg & 0xF
+
+		self.r["pc"] += 1
+
+	def decss(self, a, b):
+		reg = (self.[a] << 8) | self.r[b]
+
+		reg -= 1
+
+		self.r[a] = reg >> 8
+		self.r[b] = reg & 0xF
+
+		self.r["pc"] += 1
+
+	def rlca(self):
+		bit = self.r["a"] & 0x80
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r["a"] = (self.r["a"] << 1) & 0xFF
+
+		self.r["pc"]+=1
+
+	def rla(self):
+		self.r["a"] <<= 1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, self.r["a"] & 0x80)
+
+		self.r["pc"] += 1
+
+	def rrca(self):
+		bit = self.r["a"] & 0x1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r["a"] >>= 1
+
+		self.r["pc"] += 1
+
+	def rra(self):
+		self.r["a"] >>= 1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, self.r["a"] & 0x1)
+
+		self.r["pc"] += 1
+
+	def rlcm(self, m):
+		bit = self.r[m] & 0x80
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r[m] = (self.r[m] << 1) & 0xFF
+
+		self.r["pc"]+=1
+
+	def rlchl(self):
+		hl = (self.r["h"] << 8) | self.r["l"]
+
+		bit = hl & 0x80
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		hl = (hl << 1) & 0xFFFF
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xFF
+
+		self.r["pc"] += 1
+
+	def rlm(self, m):
+		self.r[m] = (self.r[m] << 1) & 0xFF
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, self.r[m] & 0x80)
+
+		self.r["pc"]+=1
+
+	def rlhl(self):
+		hl = (self.r["h"] << 8) | self.r["l"]
+
+		hl = (hl << 1) & 0xFFFF
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, hl & 0x80)
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xFF
+
+		self.r["pc"]+=1
+
+	def rrcm(self, m):
+		bit = self.r[m] & 0x1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r[m] >>= 1
+
+		self.r["pc"] += 1
+
+	def rrchl(self):
+		hl = (self.r["h"] << 8) | self.r["l"]
+
+		bit = hl & 0x1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		hl >>= 1
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xFF
+
+		self.r["pc"] += 1
+
+	def rrm(self, m):
+		self.r[m] >>= 1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, self.r[m] & 0x1)
+
+		self.r["pc"] += 1
+
+	def rrhl(self):
+		hl = (self.r["h"] << 8) | self.r["l"]
+
+		hl >>= 1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, hl & 0x1)
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xFF
+
+		self.r["pc"] += 1
+
+	def slam(self, m):
+		bit = self.r[m] & 0x80
+
+		self.r[m] <<= 1
+		self.r[m] &= 0xFE # Set bit 0
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r["pc"] += 1
+
+	def slahl(self):
+		hl = (self.r["h"] << 8) | self.r["l"]
+		bit = hl & 0x80
+
+		hl <<= 1
+		hl &= 0xFFFE # Set bit 0
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xFF
+
+		self.r["pc"] += 1
+
+	def sram(self, m):
+		bit = self.r[m] & 0x80
+
+		self.r[m] >>= 1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r["pc"] += 1
+
+	def srahl(self):
+		hl = (self.r["h"] << 8) | self.r["l"]
+		bit = hl & 0x1
+
+		hl >>= 1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xFF
+
+		self.r["pc"] += 1
+
+	def srlm(self, m):
+		bit = self.r[m] & 0x1
+
+		self.r[m] >>= 1
+		self.r[m] &= 0x7F
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r["pc"] += 1
+
+	def srlhl(self):
+		hl = (self.r["h"] << 8) | self.r["l"]
+		bit = hl & 0x80
+
+		hl >>= 1
+
+		setflag(0, 0)
+		setflag(1, 0)
+		setflag(2, 0)
+		setflag(3, bit)
+
+		self.r["h"] = hl >> 8
+		self.r["l"] = hl & 0xFF
+
+		self.r["pc"] += 1
