@@ -1,4 +1,4 @@
-import pygame, memory
+import memory
 
 """
 Registers are defined as dictionaries as they are hashmaps, they allow for O(1) lookup.
@@ -20,12 +20,13 @@ class CPU(object):
 
 	""" The OpcodeMap maps integers to a tuple of a function and a function paramater list """
 	opmap = {
-		0b0:(halt, [])
+		0b0:("halt", []) #halt without quotes ... "not defined"
+		#TODO?
 	}
 
 	def __init__(self, memController):
 		# All values are set to their initial values upon the systems startup
-		self.r = { "a":0,"b":0,"c":0,"d":0red,"e":0,"f":0,"h":0,"l":0, "pc":0x100
+		self.r = { "a":0,"b":0,"c":0,"d":0,"e":0,"f":0,"h":0,"l":0, "pc":0x100,
 		"sp":0xFFFE, "ime":1 }
 
 		self.memory = memController
@@ -42,7 +43,7 @@ class CPU(object):
 		return self.r["f"][n]
 
 	def execute(self, pc):
-		opcode = CPU.opmap[memController.read(pc)]
+		opcode = CPU.opmap[self.memory.read(pc)]
 		opcode[0](*opcode[1]) # Execute the opcode
 
 	# All opcode functions below
@@ -103,7 +104,7 @@ class CPU(object):
 		self.r["pc"]+=3
 
 	def ldahli(self):
-		hl = (self.r["h"]<<8)|self.r["l"])
+		hl = (self.r["h"]<<8) | (self.r["l"])
 		self.r["a"] = hl
 		hl += 1
 
@@ -112,7 +113,7 @@ class CPU(object):
 		self.r["pc"]+=1
 
 	def ldahld(self):
-		hl = (self.r["h"]<<8)|self.r["l"])
+		hl = (self.r["h"]<<8)|(self.r["l"])
 		self.r["a"] = hl
 		hl -= 1
 
@@ -129,7 +130,7 @@ class CPU(object):
 		self.r["pc"]+=1
 
 	def ldhlia(self):
-		hl = (self.r["h"]<<8)|self.r["l"])
+		hl = (self.r["h"]<<8)|(self.r["l"])
 		write(hl, self.r["a"])
 		hl += 1
 
@@ -138,7 +139,7 @@ class CPU(object):
 		self.r["pc"]+=1
 
 	def ldhlda(self):
-		hl = (self.r["h"]<<8)|self.r["l"])
+		hl = (self.r["h"]<<8)|(self.r["l"])
 		write(hl, self.r["a"])
 		hl -= 1
 
@@ -368,22 +369,22 @@ class CPU(object):
 		self.r["pc"] += 2
 
 	def incss(self, a, b):
-		reg = (self.[a] << 8) | self.r[b]
+		reg = (self.r["a"] << 8) | self.r[b]
 
 		reg += 1
 
-		self.r[a] = reg >> 8
-		self.r[b] = reg & 0xF
+		self.r["a"] = reg >> 8
+		self.r["b"] = reg & 0xF
 
 		self.r["pc"] += 1
 
 	def decss(self, a, b):
-		reg = (self.[a] << 8) | self.r[b]
+		reg = (self.r["a"] << 8) | self.r["b"]
 
 		reg -= 1
 
-		self.r[a] = reg >> 8
-		self.r[b] = reg & 0xF
+		self.r["a"] = reg >> 8
+		self.r["b"] = reg & 0xF
 
 		self.r["pc"] += 1
 
@@ -625,3 +626,7 @@ class CPU(object):
 		self.r["l"] = hl & 0xFF
 
 		self.r["pc"] += 1
+
+	def halt(self):
+		print("off we go")
+		self.r["pc"] = 0
