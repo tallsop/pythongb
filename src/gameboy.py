@@ -7,5 +7,5 @@ gbMem.readROM("../poke.gb")
 
 gbCPU = cpu.CPU(gbMem) # Pass the memory controller in
 
-gbCPU.execute()
-gbCPU.execute()
+gbCPU.execute(0x8000)
+# gbCPU.execute()
