@@ -1,5 +1,4 @@
 # Pythongb
-=========
 A Nintendo GameBoy emulator written in Python, which will use OpenGL for rendering.
 
 ## Resources Used
