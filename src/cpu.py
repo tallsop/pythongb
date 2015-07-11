@@ -1,4 +1,4 @@
-import memory
+from memory import MemoryController
 
 """
 Registers are defined as dictionaries as they are hashmaps, they allow for O(1) lookup.
@@ -13,16 +13,8 @@ H - Half carry flag - 2
 C - Carry flag - 3
 """
 
-
 class CPU(object):
-
-    """ Function caller dictionary:
-        This maps a hex int to an array, first entry being the function name, followed
-        by the array of parameters """
-
-    """ The OpcodeMap maps integers to a tuple of a function and a function paramater list """
-
-    def __init__(self, memController):
+    def __init__(self):
         # All values are set to their initial values upon the systems startup
         self.r = {
             "a": 0,
@@ -37,612 +29,172 @@ class CPU(object):
             "sp": 0xFFFE,
             "ime": 1}
 
-        self.memory = memController
+        self.memory = MemoryController()
 
     """ Helper Functions """
+    def getHL(self):
+        return self.r["h"] << 8 | self.r["l"]
 
-    def setflag(self, n, val):
-        mask = "0000"
-        mask[n] = str(val)
+    def getAB(self, a, b):
+        return self.r[a] << 8 | self.r[b]
 
-        self.r["f"] |= (int(mask) << 4)
-        return self.r["f"]
+    def incPC(self):
+        self.r["pc"] += 1
 
-    def getflag(self, n):
-        return self.r["f"][n]
+    def addAB(self, a, b, value):
+        val = (self.r[a] << 8 | self.r[b]) + value
+        self.r[a] = val >> 8
+        self.r[b] = 0x00FF & val
 
-    def execute(self, pc):
-        opcode = CPU.opmap[self.memory.read(pc)]
-        opcode[0](*opcode[1])  # Execute the opcode
+    """ Opcode functions are below """
 
-    # All opcode functions below
+    """ All 8-Bit load functions """
+    # Place the value nn into n
+    def ldnnn(self, nn):
+        # To get n we need to inc pc
+        self.incPC()
 
-    # 8-Bit Transfer Function
-    def ldr(self, r1, r2):
+        n = self.memory.read(self.r["pc"])
+        self.r[nn] = n
+
+    # Place the value in reg r2 into r1
+    def ldr1r2(self, r1, r2):
         self.r[r1] = self.r[r2]
-        self.r["pc"] += 1
 
-    def ldn(self, r):
-        self.r[r] = self.read(self.r["pc"] + 1)
-        self.r["pc"] += 2
+    # Place value of (HL) into r1
+    def ldr1hl(self, r1):
+        self.r[r1] = self.memory.read(self.getHL())
 
-    def ldhl(self, r):
-        self.r[r] = self.read((self.r["h"] << 8) | r["l"])
-        self.r["pc"] += 1
+    # Write the value in r2 to location (HL)
+    def ldhlr2(self, r2):
+        self.memory.write(self.getHL(), self.r[r2])
 
+    # Write value n to (HL)
     def ldhln(self):
-        self.write(
-            (self.r["h"] << 8) | self.r["l"],
-            self.read(
-                self.r["pc"] +
-                1))
-        self.r["pc"] += 2
+        self.incPC()
 
-    def ldbc(self):
-        self.r["a"] = self.read((self.r["b"] << 8) | self.r["c"])
-        self.r["pc"] += 1
+        n = self.memory.read(self.r["pc"])
+        self.memory.write(self.getHL(), n)
 
-    def ldde(self):
-        self.r["a"] = self.read((self.r["d"] << 8) | self.r["e"])
-        self.r["pc"] += 1
+    # Place the value of register n into A
+    def ldan(self, n):
+        self.r["a"] = self.r[n]
 
-    def ldc(self):
-        self.r["a"] = self.read(0xFF00 | self.r["c"])
-        self.r["pc"] += 1
+    # Place the value of (AB) into A
+    def ldab(self, a, b):
+        self.r["a"] = self.memory.read(self.getAB(a, b))
 
-    def lcrc(self):
-        self.write(0xFF00 | self.r["c"], self.r["a"])
-        self.r["pc"] += 1
-
-    def ldan(self):
-        self.r["a"] = self.read(self.r["pc"] + 1)
-        self.r["pc"] += 2
-
-    def ldna(self):
-        self.write(self.read(self.r["pc"] + 1), self.r["a"])
-        self.r["pc"] += 2
-
+    # Load a with the value of location nn
     def ldann(self):
-        n1 = self.read(self.r["pc"] + 1) << 8
-        n2 = self.read(self.r["pc"] + 2)
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
 
-        self.r["a"] = self.read(n1 | n2)
-        self.r["pc"] += 3
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
 
-    def ldnna(self):
-        n1 = self.read(self.r["pc"] + 1) << 8
-        n2 = self.read(self.r["pc"] + 2)
+        self.r["a"] = self.memory.read(n1 << 8 | n2)
 
-        self.write(n1 | n2, self.r["a"])
-        self.r["pc"] += 3
+    # Load A with an immediate value e (AKA #)
+    def ldae(self):
+        self.incPC()
+        e = self.memory.read(self.r["pc"])
 
-    def ldahli(self):
-        hl = (self.r["h"] << 8) | (self.r["l"])
-        self.r["a"] = hl
-        hl += 1
+        self.r["a"] = e
 
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
+    # Put the value in reg A into n
+    def ldna(self, n):
+        self.r[n] = self.r["a"]
 
-        self.r["pc"] += 1
+    # Put the value of reg A in (AB)
+    def ldaba(self, a, b):
+        self.memory.write(self.getAB(a, b), self.r["a"])
 
-    def ldahld(self):
-        hl = (self.r["h"] << 8) | (self.r["l"])
-        self.r["a"] = hl
-        hl -= 1
+    # Put value of reg A into address nn
+    def ldann(self):
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
 
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
+        nn = n1 << 8 | n2
 
-        self.r["pc"] += 1
+        self.memory.write(nn, self.r["a"])
 
-    def ldbca(self):
-        self.write((self.r["b"] << 8) | self.r["c"], self.r["a"])
-        self.r["pc"] += 1
+    # Place value at address 0xFF00 + C into A
+    def ldac(self):
+        self.r["a"] = self.memory.read(0xFF00 + self.r["c"])
 
-    def lddea(self):
-        self.write((self.r["d"] << 8) | self.r["e"], self.r["a"])
-        self.r["pc"] += 1
+    # Place the value of A into address 0xFF00 + C
+    def ldca(self):
+        self.memory.write(0xFF00 + self.r["c"], self.r["a"])
 
-    def ldhlia(self):
-        hl = (self.r["h"] << 8) | (self.r["l"])
-        self.write(hl, self.r["a"])
-        hl += 1
+    # Put the value at (HL) into A. Decrement HL.
+    def lddahl(self):
+        self.r = self.memory.read(self.getHL())
+        self.addAB("h", "l", -1)
 
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
+    # Put A into address HL, decrement HL
+    def lddhla(self):
+        self.memory.write(self.getHL(), self.r["a"])
+        self.add("h", "l", -1)
 
-        self.r["pc"] += 1
+    # Put value at address HL into A. Increment HL
+    def ldiahl(self):
+        self.r["a"] = self.memory.read(self.getHL())
+        self.addAB("h", "l", 1)
 
-    def ldhlda(self):
-        hl = (self.r["h"] << 8) | (self.r["l"])
-        self.write(hl, self.r["a"])
-        hl -= 1
+    # Put A into memory location A then increment HL
+    def ldihla(self):
+        self.memory.write(self.getHL(), self.r["a"])
+        self.add("h", "l", 1)
 
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
+    # Put A into address 0xFF00 + n
+    def ldhna(self):
+        self.incPC()
+        address = 0xFF00 + self.memory.read(self.r["pc"])
 
-        self.r["pc"] += 1
+        self.memory.write(address, self.r["a"])
 
-    def ldddnn(self, d1, d2):
-        self.r[d1] = self.read(self.r["pc"] + 1)
-        self.r[d2] = self.read(self.r["pc"] + 2)
+    # Put memory address 0xFF00 + n in A
+    def ldhan(self):
+        self.incPC()
+        address = 0xFF00 + self.memory.read(self.r["pc"])
 
-        self.r["pc"] += 3
+        self.memory.write(address, self.r["a"])
 
+    """ All 16 Bit Loads """
+    # Place value n1n2 into ab
+    def ldnnn16(self, a , b):
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
+
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
+
+        self.r[a] = n1
+        self.r[b] = n2
+
+    # Place HL into the SP
     def ldsphl(self):
-        self.r["sp"] = (self.r["h"] << 8) | self.r["l"]
-        self.r["pc"] += 1
+        self.r["sp"] = self.r["h"] << 8 | self.r["l"]
 
-    def pushqq(self, q1, q2):
-        self.write(self.r["sp"] - 1, self.r[q1])
-        self.write(self.r["sp"] - 2, self.r[q2])
+    # Put SP + n effective address into HL
+    def ldhlspn(self):
+        self.incPC()
+        n = self.memory.read(self.r["pc"])
 
-        self.r["sp"] -= 2
-        self.r["pc"] += 1
+        temp = self.r["sp"] + n
 
-    def popqq(self, q1, q2):
-        self.r[q1] = self.read(self.r["sp"])
-        self.r[q2] = self.read(self.r["sp"] + 1)
+        self.r["h"] = temp >> 8
+        self.r["l"] = temp & 0x00FF
 
-        self.r["sp"] += 2
-        self.r["pc"] += 1
-
-    def ldhlspe(self):
-        e = self.read(self.r["pc"] + 1)
-
-        if e & 0x80:
-            e -= 0x100
-
-        hl = self.r["sp"] + e
-
-        if e >= 0:
-            self.setflag(2, ((self.r["sp"] & 0xF) + (e & 0xF)) > 0xF)
-            self.setflag(3, ((self.r["sp"] & 0xFF) + e) > 0xFF)
-        else:
-            self.setflag(2, (self.r["sp"] & 0xFF) <= (hl & 0xFF))
-            self.setflag(3, (self.r["sp"] & 0xF) <= (hl & 0xF))
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xF
-
+    # Put SP at address nn
     def ldnnsp(self):
-        nn = (self.read(self.r["pc"] + 1) << 8) | self.read(self.r["pc"] + 2)
-        self.write(nn, self.r["sp"] & 0xFF)
-        self.write(nn + 1, self.r["sp"] >> 8)
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
 
-        self.r["pc"] += 3
+        address = n1 << 8 | n2
 
-    def add(self, val, pc):
-        temp = self.r["a"]
-        self.r["a"] += val
-
-        # Set if zero
-        self.setflag(0, self.r["a"] == 0)
-        # Reset subtration bit
-        self.setflag(1, 0)
-        # Check for carry from 4th to 5th bit
-        self.setflag(2, ((temp & 0xF) + (val & 0xF) > 0xF))
-        # Check for overflow
-        self.setflag(3, self.r["a"] > 0xFF)
-
-        self.r["pc"] += pc
-
-    def adc(self, var, pc):
-        temp = self.r["a"]
-        self.r["a"] += var + self.getflag(3)
-
-        # Set if zero
-        self.setflag(0, self.r["a"] == 0)
-        # Reset subtration bit
-        self.setflag(1, 0)
-        # Check for carry from 4th to 5th bit
-        self.setflag(2, ((temp & 0xF) + (val & 0xF) + self.getflag(3) > 0xF))
-        # Check for overflow
-        self.setflag(3, self.r["a"] > 0xFF)
-
-        self.r["pc"] += pc
-
-    def sub(self, val, pc):
-        temp = self.r["a"]
-        self.r["a"] -= val
-
-        # Set if zero
-        self.setflag(0, self.r["a"] == 0)
-        # Reset subtration bit
-        self.setflag(1, 0)
-
-        self.setflag(2, (self.r["a"] & 0xF) <= (temp & 0xF))
-
-        self.setflag(3, (self.r["a"] & 0xFF) <= (temp & 0xFF))
-
-        self.r["pc"] += pc
-
-    def subc(self, var, pc):
-        temp = self.r["a"]
-        self.r["a"] -= (var - self.getflag(3))
-
-        # Set if zero
-        self.setflag(0, self.r["a"] == 0)
-        # Reset subtration bit
-        self.setflag(1, 0)
-
-        self.setflag(2, (self.r["a"] & 0xF) <= (temp & 0xF))
-
-        self.setflag(3, (self.r["a"] & 0xFF) <= (temp & 0xFF))
-
-        self.r["pc"] += pc
-
-    def gband(self, var, pc):
-        self.r["a"] &= var
-
-        self.setflag(0, self.r["a"] == 0)
-        self.setflag(1, 0)
-        self.setflag(2, 1)
-        self.setflag(3, 0)
-
-        self.r["pc"] += pc
-
-    def gbor(self, var, pc):
-        self.r["a"] |= var
-
-        self.setflag(0, self.r["a"] == 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, 0)
-
-        self.r["pc"] += pc
-
-    def xor(self, var, pc):
-        self.r["a"] ^= var
-
-        self.setflag(0, self.r["a"] == 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, 0)
-
-        self.r["pc"] += pc
-
-    def cpn(self, var, pc):
-        self.setflag(0, self.r["a"] == var)
-        self.setflag(1, 1)
-        self.setflag(2, (self.r["a"] & 0xF) <= (var & 0xF))
-        self.setflag(3, self.r["a"] < var)
-
-        self.r["pc"] += pc
-
-    def inc(self, r):
-        self.r[r] += 1
-        self.setflag(0, self.r["a"] == 0)
-        self.setflag(1, 0)
-        self.setflag(2, ((self.r[r] - 1) & 0xF) + 1 > 0xF)
-
-        self.r["pc"] += 1
-
-    def inchl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-
-        hl += 1
-
-        self.setflag(0, hl == 0)
-        self.setflag(1, 0)
-        self.setflag(2, ((hl - 1) & 0xF) + 1 > 0xF)
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xF
-
-        self.r["pc"] += 1
-
-    def dec(self, r):
-        self.r[r] -= 1
-        self.setflag(0, self.r["a"] == 0)
-        self.setflag(1, 1)
-        self.setflag(2, ((self.r[r] + 1) & 0xF) - 1 > 0xF)
-
-        self.r["pc"] += 1
-
-    def dechl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-
-        hl -= 1
-
-        self.setflag(0, hl == 0)
-        self.setflag(1, 1)
-        self.setflag(2, ((hl + 1) & 0xF) - 1 > 0xF)
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xF
-
-        self.r["pc"] += 1
-
-    def addhlss(self, a, b):
-        hl = (self.r["h"] << 8) | self.r["l"]
-        reg = (self.r[a] << 8) | self.r[b]
-
-        self.setflag(1, 0)
-        self.setflag(2, (hl & 0xF) + (reg & 0xF) > 0xF)
-        self.setflag(3, (hl & 0XFF) + (reg & 0xFF) > 0xFF)
-
-        hl += reg
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
-
-        self.r["pc"] += 1
-
-    def addspe(self):
-        e = self.read(self.r["pc"] + 1)
-
-        # First bit is set
-        if e & 0x80:
-            e -= 0x100
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, (self.r["sp"] & 0xF) + e & 0xF > 0xF)
-        self.setflag(3, (self.r["sp"] & 0xFF) + e > 0xFF)
-
-        self.r["sp"] += e
-
-        self.r["pc"] += 2
-
-    def incss(self, a, b):
-        reg = (self.r["a"] << 8) | self.r[b]
-
-        reg += 1
-
-        self.r["a"] = reg >> 8
-        self.r["b"] = reg & 0xF
-
-        self.r["pc"] += 1
-
-    def decss(self, a, b):
-        reg = (self.r["a"] << 8) | self.r["b"]
-
-        reg -= 1
-
-        self.r["a"] = reg >> 8
-        self.r["b"] = reg & 0xF
-
-        self.r["pc"] += 1
-
-    def rlca(self):
-        bit = self.r["a"] & 0x80
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r["a"] = (self.r["a"] << 1) & 0xFF
-
-        self.r["pc"] += 1
-
-    def rla(self):
-        self.r["a"] <<= 1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, self.r["a"] & 0x80)
-
-        self.r["pc"] += 1
-
-    def rrca(self):
-        bit = self.r["a"] & 0x1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r["a"] >>= 1
-
-        self.r["pc"] += 1
-
-    def rra(self):
-        self.r["a"] >>= 1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, self.r["a"] & 0x1)
-
-        self.r["pc"] += 1
-
-    def rlcm(self, m):
-        bit = self.r[m] & 0x80
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r[m] = (self.r[m] << 1) & 0xFF
-
-        self.r["pc"] += 1
-
-    def rlchl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-
-        bit = hl & 0x80
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        hl = (hl << 1) & 0xFFFF
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
-
-        self.r["pc"] += 1
-
-    def rlm(self, m):
-        self.r[m] = (self.r[m] << 1) & 0xFF
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, self.r[m] & 0x80)
-
-        self.r["pc"] += 1
-
-    def rlhl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-
-        hl = (hl << 1) & 0xFFFF
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, hl & 0x80)
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
-
-        self.r["pc"] += 1
-
-    def rrcm(self, m):
-        bit = self.r[m] & 0x1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r[m] >>= 1
-
-        self.r["pc"] += 1
-
-    def rrchl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-
-        bit = hl & 0x1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        hl >>= 1
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
-
-        self.r["pc"] += 1
-
-    def rrm(self, m):
-        self.r[m] >>= 1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, self.r[m] & 0x1)
-
-        self.r["pc"] += 1
-
-    def rrhl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-
-        hl >>= 1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, hl & 0x1)
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
-
-        self.r["pc"] += 1
-
-    def slam(self, m):
-        bit = self.r[m] & 0x80
-
-        self.r[m] <<= 1
-        self.r[m] &= 0xFE  # Set bit 0
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r["pc"] += 1
-
-    def slahl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-        bit = hl & 0x80
-
-        hl <<= 1
-        hl &= 0xFFFE  # Set bit 0
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
-
-        self.r["pc"] += 1
-
-    def sram(self, m):
-        bit = self.r[m] & 0x80
-
-        self.r[m] >>= 1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r["pc"] += 1
-
-    def srahl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-        bit = hl & 0x1
-
-        hl >>= 1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
-
-        self.r["pc"] += 1
-
-    def srlm(self, m):
-        bit = self.r[m] & 0x1
-
-        self.r[m] >>= 1
-        self.r[m] &= 0x7F
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r["pc"] += 1
-
-    def srlhl(self):
-        hl = (self.r["h"] << 8) | self.r["l"]
-        bit = hl & 0x80
-
-        hl >>= 1
-
-        self.setflag(0, 0)
-        self.setflag(1, 0)
-        self.setflag(2, 0)
-        self.setflag(3, bit)
-
-        self.r["h"] = hl >> 8
-        self.r["l"] = hl & 0xFF
-
-        self.r["pc"] += 1
-
-    def halt(self):
-        self.r["pc"] = 0
+        self.memory.write(address, self.r["sp"])

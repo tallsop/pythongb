@@ -61,7 +61,7 @@ class MemoryController():
         if loc < 0x4000:
             return self.rom[loc]
         elif loc < 0x8000:
-            return self.rom[0x4000 * currBank + (loc - 0x4000)]
+            return self.rom[0x4000 + (loc - 0x4000)]
         elif loc < 0xA000:
             return self.vram[loc - 0x8000]
         elif loc < 0xC000:
