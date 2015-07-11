@@ -1,3 +1,6 @@
 *.gb
 *.pdf
 *.pyc
+
+// PyCharm Ignores
+.idea/
