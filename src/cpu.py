@@ -232,11 +232,55 @@ class CPU(object):
 
     # Add the value in reg n to A
     def addan(self, n):
+        # Set the half carry flag
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F + self.r[n] & 0x0F) & 0x10 else 0
+
         self.r["a"] += self.r[n]
 
-        # Set the flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 1
+        # Set the final flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
-        self.flag["h"] = 1 if self.r["a"]
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Add the value in memory address (HL) to A
+    def addahl(self):
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
+
+        # Set the half carry flag
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F + value & 0x0F) & 0x10 else 0
+
+        self.r["a"] += value
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Add the next memory address to A
+    def addanext(self):
+        self.incPC()
+        value = self.memory.read(self.r["pc"])
+
+        # Set the half carry flag
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F + value & 0x0F) & 0x10 else 0
+
+        self.r["a"] += value
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+
+    # Add n + carry flag to A
+    def adcan(self, n):
+        # Set the half carry flag
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F + self.r[n] & 0x0F + self.flag["c"]) & 0x10 else 0
+
+        self.r["a"] += self.r[n] + self.flag["c"]
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
