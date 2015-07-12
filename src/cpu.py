@@ -59,6 +59,16 @@ class CPU(object):
     def getFlagAsInt(self):
         return self.flag["z"] << 8 | self.flag["n"] << 7 | self.flag["h"] << 6 | self.flag["c"] << 5
 
+    def set_bit(self, v, index, x):
+        """Set the index:th bit of v to x, and return the new value."""
+        mask = 1 << index
+        v &= ~mask
+
+        if x:
+            v |= mask
+
+        return v
+
     """ Opcode functions are below """
 
     """ All 8-Bit load functions """
@@ -573,4 +583,360 @@ class CPU(object):
         self.memory.write(self.r["h"] << 8 | self.r["l"], value)
 
     """ 16-Bit ALU Commands """
-    
+    # Add register pair AB to HL
+    def addhln(self, a, b):
+        value = self.r[a] << 8 | self.r[b]
+        hl = self.r["h"] << 8 | self.r["l"]
+
+        # Set the half carry flag
+        self.flag["h"] = 1 if (hl & 0x0FFF + value & 0x0FFF) & 0x1000 else 0
+
+        final = value + hl
+
+        # Set the remaining flags
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if final > 0xFFFF else 0
+
+        # Place this value in the registers
+        self.r["h"] = final >> 8
+        self.r["l"] = final & 0x00FF
+
+    # Add SP to HL
+    def addhlsp(self, a, b):
+        hl = self.r["h"] << 8 | self.r["l"]
+
+        # Set the half carry flag
+        self.flag["h"] = 1 if (hl & 0x0FFF + self.r["sp"] & 0x0FFF) & 0x1000 else 0
+
+        final = self.r["sp"] + hl
+
+        # Set the remaining flags
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if final > 0xFFFF else 0
+
+        # Place this value in the registers
+        self.r["h"] = final >> 8
+        self.r["l"] = final & 0x00FF
+
+    # Add (PC+1) to the SP
+    def addspn(self):
+        self.incPC()
+        value = self.memory.read(self.r["pc"])
+
+        # Set the half carry flag
+        self.flag["h"] = 1 if (self.r["sp"] & 0x0FFF + value & 0x0FFF) & 0x1000 else 0
+
+        self.r["sp"] += value
+
+        # Set the remaining flags
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["sp"] > 0xFFFF else 0
+
+    # Increment the register pair AB
+    def incnn(self, a, b):
+        final = (self.r[a] << 8 | self.r[b]) + 1
+
+        self.r[a] = final >> 8
+        self.r[b] = final & 0x00FF
+
+    # Increment the SP
+    def incsp(self):
+        self.r["sp"] += 1
+
+    # Decrement the register pair AB
+    def decnn(self, a, b):
+        final = (self.r[a] << 8 | self.r[b]) - 1
+
+        self.r[a] = final >> 8
+        self.r[b] = final & 0x00FF
+
+    # Decrement the SP
+    def decsp(self):
+        self.r["sp"] -= 1
+
+    """ Miscellaneous Opcodes """
+    # Swap upper and lower nibbles of n
+    def swapn(self, n):
+        self.r[n] = (self.r[n] & 0x0F) << 4 | self.r[n] >> 4
+
+    # Swap upper and lower nibbles of (HL)
+    def swaphl(self):
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
+
+        value = (value & 0x0F) << 4 | value >> 4
+
+        self.memory.write(self.r["h"] << 8 | self.r["l"], value)
+
+    # TODO Write this function
+    def daa(self):
+        pass
+
+    # Complement the A register
+    def cpl(self):
+        self.r["a"] ^= 0xFF
+
+        # Set the flags
+        self.flag["n"] = 1
+        self.flag["h"] = 1
+
+    # Complement the carry flag
+    def ccf(self):
+        self.flag["c"] ^= 1
+
+    # Set the carry flag
+    def scf(self):
+        self.flag["c"] = 1
+
+    # No operation
+    def nop(self):
+        pass
+
+    # Power down the CPU until some interrupt occurs.
+    # TODO Implement this
+    def halt(self):
+        pass
+
+    # Halt the CPU and display
+    # TODO Implement this
+    def stop(self):
+        pass
+
+    # Stop interrupts after this instruction has executed
+    # TODO Implement this
+    def di(self):
+        pass
+
+    # Enable interrupts after this instruction has executed
+    # TODO Implement this
+    def di(self):
+        pass
+
+    """ Rotate and shift instructions """
+    # Rotate A left into carry flag, replace bit 0 with 7
+    def rlca(self):
+        bit7 = self.r["a"] & 0x80
+        self.flag["c"] = bit7
+
+        self.r["a"] <<= 1
+
+        self.r["a"] = self.set_bit(self.r["a"], 0, bit7)
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Rotate A left into carry flag
+    def rla(self):
+        self.flag["c"] = self.r["a"] & 0x80
+
+        self.r["a"] <<= 1
+
+         # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Rotate A right into carry flag, replace bit 7 with 0
+    def rrca(self):
+        bit0 = self.r["a"] & 0x01
+        self.flag["c"] = bit0
+
+        self.r["a"] >>= 1
+
+        self.r["a"] = self.set_bit(self.r["a"], 7, bit0)
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Rotate A right into carry flag
+    def rra(self):
+        self.flag["c"] = self.r["a"] & 0x01
+
+        self.r["a"] <<= 1
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Rotate n left into carry flag, replace bit 0 with 7
+    def rlcn(self, n):
+        bit7 = self.r[n] & 0x80
+        self.flag["c"] = bit7
+
+        self.r[n] <<= 1
+
+        self.r["a"] = self.set_bit(self.r["a"], 0, bit7)
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Rotate n left into carry flag
+    def rln(self, n):
+        self.flag["c"] = self.r[n] & 0x80
+
+        self.r[n] <<= 1
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Rotate n right into carry flag, replace bit 7 with 0
+    def rrcn(self, n):
+        bit0 = self.r[n] & 0x01
+        self.flag["c"] = bit0
+
+        self.r[n] >>= 1
+
+        self.r["a"] = self.set_bit(self.r["a"], 7, bit0)
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Rotate n right into carry flag
+    def rra(self, n):
+        self.flag["c"] = self.r[n] & 0x01
+
+        self.r[n] <<= 1
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Shift n left into carry flag, LSB of n is set to 0
+    def slan(self, n):
+        self.flag["c"] = self.r[n] & 0x80
+
+        self.r[n] <<= 1
+
+        self.r["a"] = self.set_bit(self.r["a"], 0, 0)
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Shift n right into carry, replace the MSB with the previous one?
+    def sran(self, n):
+        self.flag["c"] = self.r[n] & 0x01
+        msb = (self.r[n] & 0x80) >> 7
+
+        self.r[n] >>= 1
+
+        self.r["a"] = self.set_bit(self.r["a"], 7, msb)
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    # Shift n right into carry, set the msb to 0
+    def srln(self, n):
+        self.flag["c"] = self.r[n] & 0x01
+
+        self.r[n] >>= 1
+
+        self.r["a"] = self.set_bit(self.r["a"], 7, 0)
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+    """ Bit Opcodes """
+    # Test bit b in register r
+    def bitbr(self, b, r):
+        # Get this bit
+        bit = (self.r[r] >> (b - 1)) & 0x01
+
+        # Set the flags
+        if bit == 0:
+            self.flag["z"] = 1
+        self.flag["n"] = 0
+        self.flag["h"] = 1
+
+    def setbr(self, b, r):
+        # Set the bit
+        self.r[r] = self.set_bit(self.r[r], b, 1)
+
+    def resbr(self, b, r):
+        # Set the bit
+        self.r[r] = self.set_bit(self.r[r], b, 1)
+
+    """ Jump Operations """
+    # Jump to address nn
+    def jpnn(self):
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
+
+        self.r["pc"] = n1 << 8 | n2
+
+    # Jump to address if Z flag is reset
+    def jpnznn(self):
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
+
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
+
+        if self.flag["z"] == 0:
+            self.r["pc"] = n1 << 8 | n2
+
+    # Jump to address if Z flag is set
+    def jpznn(self):
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
+
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
+
+        if self.flag["z"] == 1:
+            self.r["pc"] = n1 << 8 | n2
+
+    # Jump to address if C flag is reset
+    def jpncnn(self):
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
+
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
+
+        if self.flag["c"] == 0:
+            self.r["pc"] = n1 << 8 | n2
+
+
+    # Jump to address if C flag is set
+    def jpcnn(self):
+        self.incPC()
+        n1 = self.memory.read(self.r["pc"])
+
+        self.incPC()
+        n2 = self.memory.read(self.r["pc"])
+
+        if self.flag["c"] == 1:
+            self.r["pc"] = n1 << 8 | n2
+
+    # Jump to the address held in HL
+    def jphl(self):
+        self.r["pc"] = self.r["h"] << 8 | self.r["l"]
+
+    # Add n to current address and jump to it
+    def jrn(self):
+        curr = self.r["pc"]
+
+        self.incPC()
+        n = self.memory.read(self.r["pc"])
+
+        self.r["pc"] = curr + n
+        
