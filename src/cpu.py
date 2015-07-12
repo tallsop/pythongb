@@ -284,3 +284,293 @@ class CPU(object):
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
+    # Add (HL) + carry to A
+    def adcahl(self):
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F + value & 0x0F + self.flag["c"]) & 0x10 else 0
+
+        self.r["a"] += value + self.flag["c"]
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Add the next memory address to A + carry bit
+    def adcanext(self):
+        self.incPC()
+        value = self.memory.read(self.r["pc"])
+
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F + value & 0x0F + self.flag["c"]) & 0x10 else 0
+
+        self.r["a"] += value + self.flag["c"]
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Subtract register n from A
+    def subn(self, n):
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - self.r[n] & 0x0F) & 0x10 else 0
+
+        self.r["a"] -= self.r[n]
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Subtract (HL) from A
+    def subhl(self):
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - value & 0x0F) & 0x10 else 0
+
+        self.r["a"] -= value
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Subtract A from (PC+1)
+    def subnext(self):
+        self.incPC()
+        value = self.memory.read(self.r["pc"])
+
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - value & 0x0F) & 0x10 else 0
+
+        self.r["a"] -= value
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Subtract register n + carry from A
+    def sbcan(self, n):
+        # Set the half carry flag
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - (self.r[n] & 0x0F + self.flag["c"])) & 0x10 else 0
+
+        self.r["a"] -= (self.r[n] + self.flag["c"])
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Subtract (HL) carry from A
+    def sbcahl(self):
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - (value & 0x0F + self.flag["c"])) & 0x10 else 0
+
+        self.r["a"] -= (value + self.flag["c"])
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Subtract the next memory address value + carry from A
+    def sbcanext(self):
+        self.incPC()
+        value = self.memory.read(self.r["pc"])
+
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - (value & 0x0F + self.flag["c"])) & 0x10 else 0
+
+        self.r["a"] -= (value + self.flag["c"])
+
+        # Set the final flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
+    # Perform A & n, place in A
+    def andn(self, n):
+        self.r["a"] &= self.r[n]
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 1
+        self.flag["c"] = 0
+
+    # Peform A & (HL), place in A
+    def andhl(self):
+        value = self.memory.load(self.r["h"] << 8 | self.r["l"])
+
+        self.r["a"] &= value
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 1
+        self.flag["c"] = 0
+
+    # Perform A & (PC+1), place in A
+    def andnext(self):
+        self.incPC()
+
+        value = self.memory.load(self.r["pc"])
+
+        self.r["a"] &= value
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 1
+        self.flag["c"] = 0
+
+    # Perform A | n, place in A
+    def orn(self, n):
+        self.r["a"] |= self.r[n]
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+        self.flag["c"] = 0
+
+    # Peform A | (HL), place in A
+    def orhl(self):
+        value = self.memory.load(self.r["h"] << 8 | self.r["l"])
+
+        self.r["a"] &= value
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+        self.flag["c"] = 0
+
+    # Perform A | (PC+1), place in A
+    def ornext(self):
+        self.incPC()
+
+        value = self.memory.load(self.r["pc"])
+
+        self.r["a"] ^= value
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+        self.flag["c"] = 0
+
+    # Perform A ^ n, place in A
+    def xorn(self, n):
+        self.r["a"] |= self.r[n]
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+        self.flag["c"] = 0
+
+    # Peform A ^ (HL), place in A
+    def xorhl(self):
+        value = self.memory.load(self.r["h"] << 8 | self.r["l"])
+
+        self.r["a"] ^= value
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+        self.flag["c"] = 0
+
+    # Perform A ^ (PC+1), place in A
+    def xornext(self):
+        self.incPC()
+
+        value = self.memory.load(self.r["pc"])
+
+        self.r["a"] ^= value
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+        self.flag["c"] = 0
+
+    # Subtract register n from A, discard the result
+    def cpn(self, n):
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - self.r[n] & 0x0F) & 0x10 else 0
+
+        discard = self.r["a"] - self.r[n]
+
+        # Set the final flags
+        self.flag["z"] = 0 if discard == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if discard > 0xFFFF else 0
+
+    # Subtract (HL) from A, discard the result
+    def cphl(self):
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - value & 0x0F) & 0x10 else 0
+
+        discard = self.r["a"] - value
+
+        # Set the final flags
+        self.flag["z"] = 0 if discard == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if discard > 0xFFFF else 0
+
+    # Subtract A from (PC+1), dicsard result
+    def cpnext(self):
+        self.incPC()
+        value = self.memory.read(self.r["pc"])
+
+        self.flag["h"] = 1 if (self.r["a"] & 0x0F - value & 0x0F) & 0x10 else 0
+
+        discard = self.r["a"] - value
+
+        # Set the final flags
+        self.flag["z"] = 0 if discard == 0 else 0
+        self.flag["n"] = 0
+        self.flag["c"] = 1 if discard > 0xFFFF else 0
+
+    # Increment register n
+    def incn(self, n):
+        self.r[n] += 1
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 1
+        self.flag["n"] = 0
+        self.flag["h"] = 1 if self.r[n] & 0x10 else 0
+
+    # Increment address value (HL)
+    def inchl(self):
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"]) + 1
+
+        # Set the flags
+        self.flag["z"] = 1 if value == 0 else 1
+        self.flag["n"] = 0
+        self.flag["h"] = 1 if value & 0x10 else 0
+
+        # Now write this value
+        self.memory.write(self.r["h"] << 8 | self.r["l"], value)
+
+    # Decrement register n
+    def decn(self, n):
+        self.r[n] -= 1
+
+        # Set the flags
+        self.flag["z"] = 1 if self.r[n] == 0 else 1
+        self.flag["n"] = 0
+        self.flag["h"] = 1 if self.r[n] & 0x10 else 0
+
+    # Decrement address value (HL)
+    def dechl(self):
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"]) - 1
+
+        # Set the flags
+        self.flag["z"] = 1 if value == 0 else 1
+        self.flag["n"] = 0
+        self.flag["h"] = 1 if value & 0x10 else 0
+
+        # Now write this value
+        self.memory.write(self.r["h"] << 8 | self.r["l"], value)
+
+    """ 16-Bit ALU Commands """
+    
