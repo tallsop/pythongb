@@ -29,6 +29,13 @@ class CPU(object):
             "sp": 0xFFFE,
             "ime": 1}
 
+        # Initially the flag register is 0?
+        self.flag = {
+            "z" : 0,
+            "n" : 0,
+            "h" : 0,
+            "c" : 0
+        }
         self.memory = MemoryController()
 
     """ Helper Functions """
@@ -41,10 +48,16 @@ class CPU(object):
     def incPC(self):
         self.r["pc"] += 1
 
+    def addSP(self, value):
+        self.r["sp"] += value
+
     def addAB(self, a, b, value):
         val = (self.r[a] << 8 | self.r[b]) + value
         self.r[a] = val >> 8
         self.r[b] = 0x00FF & val
+
+    def getFlagAsInt(self):
+        return self.flag["z"] << 8 | self.flag["n"] << 7 | self.flag["h"] << 6 | self.flag["c"] << 5
 
     """ Opcode functions are below """
 
@@ -198,3 +211,32 @@ class CPU(object):
         address = n1 << 8 | n2
 
         self.memory.write(address, self.r["sp"])
+
+    # Push register pair AB onto stack and decrement the SP twice
+    def pushnn(self, a, b):
+        self.addSP(-1)
+        self.memory.write(self.r["sp"], self.r[a])
+
+        self.addSP(-1)
+        self.memory.write(self.r["sp"], self.r[b])
+
+    # Pop two byte ints off the stack increment sp twice
+    def popnn(self, a, b):
+        self.r[b] = self.memory.read(self.r["sp"])
+        self.addSP(1)
+
+        self.r[a] = self.memory.read(self.r["sp"])
+        self.addSP(1)
+
+    """ 8-Bit ALU Commands """
+
+    # Add the value in reg n to A
+    def addan(self, n):
+        self.r["a"] += self.r[n]
+
+        # Set the flags
+        self.flag["z"] = 0 if self.r["a"] == 0 else 1
+        self.flag["n"] = 0
+        self.flag["h"] = 1 if self.r["a"]
+        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
