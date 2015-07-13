@@ -69,6 +69,13 @@ class CPU(object):
 
         return v
 
+    def pushpc(self):
+        self.addSP(-1)
+        self.memory.write(self.r["sp"], self.r["pc"] >> 8)
+
+        self.addSP(-1)
+        self.memory.write(self.r["sp"], self.r["pc"] & 0x00FF)
+
     """ Opcode functions are below """
 
     """ All 8-Bit load functions """
@@ -115,7 +122,7 @@ class CPU(object):
         self.incPC()
         n2 = self.memory.read(self.r["pc"])
 
-        self.r["a"] = self.memory.read(n1 << 8 | n2)
+        self.r["a"] = self.memory.read(n2 << 8 | n1)
 
     # Load A with an immediate value e (AKA #)
     def ldae(self):
@@ -214,13 +221,10 @@ class CPU(object):
     # Put SP at address nn
     def ldnnsp(self):
         self.incPC()
-        n1 = self.memory.read(self.r["pc"])
+        self.memory.write(self.r["pc"], self.r["sp"] & 0x00FF)
+
         self.incPC()
-        n2 = self.memory.read(self.r["pc"])
-
-        address = n1 << 8 | n2
-
-        self.memory.write(address, self.r["sp"])
+        self.memory.write(self.r["pc"], self.r["sp"] >> 8)
 
     # Push register pair AB onto stack and decrement the SP twice
     def pushnn(self, a, b):
@@ -939,4 +943,185 @@ class CPU(object):
         n = self.memory.read(self.r["pc"])
 
         self.r["pc"] = curr + n
-        
+
+    # If Z is reset, jump to current address + n
+    def jrnzn(self):
+        self.incPC()
+        if self.flag["z"] == 0:
+            n = self.memory.read(self.r["pc"])
+            self.r["pc"] += n - 1
+
+    # If Z is set, jump to current address + n
+    def jrzn(self):
+        self.incPC()
+        if self.flag["z"] == 1:
+            n = self.memory.read(self.r["pc"])
+            self.r["pc"] += n - 1
+
+    def jrncn(self):
+        self.incPC()
+        if self.flag["c"] == 0:
+            n = self.memory.read(self.r["pc"])
+            self.r["pc"] += n - 1
+
+    def jrcn(self):
+        self.incPC()
+        if self.flag["c"] == 1:
+            n = self.memory.read(self.r["pc"])
+            self.r["pc"] += n - 1
+
+    """ Function Call Opcodes """
+    # Push address of next instruction onto the stack then go to nn
+    def callnn(self):
+        # Push the pc to the stack
+        self.pushpc()
+
+        self.incPC()
+        low = self.memory.read(self.r["pc"])
+
+        self.incPC()
+        high = self.memory.read(self.r["pc"])
+
+        self.r["pc"] = high << 8 | low
+
+    # Call the address nn if the Z flag is reset
+    def callnznn(self):
+        if self.flag["z"] == 0:
+            # Push the pc to the stack
+            self.pushpc()
+
+            self.incPC()
+            low = self.memory.read(self.r["pc"])
+
+            self.incPC()
+            high = self.memory.read(self.r["pc"])
+
+            self.r["pc"] = high << 8 | low
+
+        else:
+            self.incPC()
+            self.incPC()
+
+    # Call the address nn if the Z flag is set
+    def callznn(self):
+        if self.flag["z"] == 1:
+            # Push the pc to the stack
+            self.pushpc()
+
+            self.incPC()
+            low = self.memory.read(self.r["pc"])
+
+            self.incPC()
+            high = self.memory.read(self.r["pc"])
+
+            self.r["pc"] = high << 8 | low
+
+        else:
+            self.incPC()
+            self.incPC()
+
+    # Call the address nn if the c flag is reset
+    def callncnn(self):
+        if self.flag["c"] == 0:
+            # Push the pc to the stack
+            self.pushpc()
+
+            self.incPC()
+            low = self.memory.read(self.r["pc"])
+
+            self.incPC()
+            high = self.memory.read(self.r["pc"])
+
+            self.r["pc"] = high << 8 | low
+
+        else:
+            self.incPC()
+            self.incPC()
+
+    # Call the address nn if the c flag is set
+    def callcnn(self):
+        if self.flag["c"] == 1:
+            # Push the pc to the stack
+            self.pushpc()
+
+            self.incPC()
+            low = self.memory.read(self.r["pc"])
+
+            self.incPC()
+            high = self.memory.read(self.r["pc"])
+
+            self.r["pc"] = high << 8 | low
+
+        else:
+            self.incPC()
+            self.incPC()
+
+    """ Restart Opcodes """
+    # Push the current address onto the stack and jump to address 0x0000 + n
+    def rstn(self, n):
+        self.pushpc()
+        self.r["pc"] = 0x0000 + n
+
+
+    """ Return Opcodes """
+    # Pop two bytes off the stack and jump to that address
+    def ret(self):
+        low = self.memory.read(self.r["sp"])
+        self.addSP(1)
+        high = self.memory.read(self.r["sp"])
+        self.addSP(1)
+
+        self.r["pc"] = high << 8 | low
+
+    # Return if the Z flag is reset
+    def retnz(self):
+        if self.flag["z"] == 0:
+            low = self.memory.read(self.r["sp"])
+            self.addSP(1)
+            high = self.memory.read(self.r["sp"])
+            self.addSP(1)
+
+            self.r["pc"] = high << 8 | low
+
+    # Return if the Z flag is set
+    def retnz(self):
+        if self.flag["z"] == 1:
+            low = self.memory.read(self.r["sp"])
+            self.addSP(1)
+            high = self.memory.read(self.r["sp"])
+            self.addSP(1)
+
+            self.r["pc"] = high << 8 | low
+
+    # Return if the C flag is reset
+    def retnz(self):
+        if self.flag["C"] == 0:
+            low = self.memory.read(self.r["sp"])
+            self.addSP(1)
+            high = self.memory.read(self.r["sp"])
+            self.addSP(1)
+
+            self.r["pc"] = high << 8 | low
+
+    # Return if the C flag is set
+    def retnz(self):
+        if self.flag["C"] == 1:
+            low = self.memory.read(self.r["sp"])
+            self.addSP(1)
+            high = self.memory.read(self.r["sp"])
+            self.addSP(1)
+
+            self.r["pc"] = high << 8 | low
+
+    # Pop two bytes off the stack and enable interrupts
+    def reti(self):
+        low = self.memory.read(self.r["sp"])
+        self.addSP(1)
+        high = self.memory.read(self.r["sp"])
+        self.addSP(1)
+
+        self.r["pc"] = high << 8 | low
+
+        # TODO: Enable interrupts
+
+
