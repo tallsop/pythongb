@@ -31,10 +31,10 @@ class CPU(object):
 
         # Initially the flag register is 0?
         self.flag = {
-            "z" : 0,
-            "n" : 0,
-            "h" : 0,
-            "c" : 0
+            "z": 0,
+            "n": 0,
+            "h": 0,
+            "c": 0
         }
         self.memory = MemoryController()
 
@@ -79,13 +79,16 @@ class CPU(object):
     """ Opcode functions are below """
 
     """ All 8-Bit load functions """
-    # Place the value nn into n
+    # Place the value n into nn
     def ldnnn(self, nn):
         # To get n we need to inc pc
         self.incPC()
 
         n = self.memory.read(self.r["pc"])
+
         self.r[nn] = n
+
+
 
     # Place the value in reg r2 into r1
     def ldr1r2(self, r1, r2):
@@ -140,7 +143,7 @@ class CPU(object):
         self.memory.write(self.getAB(a, b), self.r["a"])
 
     # Put value of reg A into address nn
-    def ldann(self):
+    def ldnna(self):
         self.incPC()
         n1 = self.memory.read(self.r["pc"])
         self.incPC()
@@ -201,8 +204,8 @@ class CPU(object):
         self.incPC()
         n2 = self.memory.read(self.r["pc"])
 
-        self.r[a] = n1
-        self.r[b] = n2
+        self.r[a] = n2
+        self.r[b] = n1
 
     # Place HL into the SP
     def ldsphl(self):
@@ -284,7 +287,6 @@ class CPU(object):
         self.flag["z"] = 0 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
-
 
     # Add n + carry flag to A
     def adcan(self, n):
@@ -411,7 +413,7 @@ class CPU(object):
 
     # Peform A & (HL), place in A
     def andhl(self):
-        value = self.memory.load(self.r["h"] << 8 | self.r["l"])
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
 
         self.r["a"] &= value
 
@@ -425,7 +427,7 @@ class CPU(object):
     def andnext(self):
         self.incPC()
 
-        value = self.memory.load(self.r["pc"])
+        value = self.memory.read(self.r["pc"])
 
         self.r["a"] &= value
 
@@ -447,7 +449,7 @@ class CPU(object):
 
     # Peform A | (HL), place in A
     def orhl(self):
-        value = self.memory.load(self.r["h"] << 8 | self.r["l"])
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
 
         self.r["a"] &= value
 
@@ -461,7 +463,7 @@ class CPU(object):
     def ornext(self):
         self.incPC()
 
-        value = self.memory.load(self.r["pc"])
+        value = self.memory.read(self.r["pc"])
 
         self.r["a"] ^= value
 
@@ -483,7 +485,7 @@ class CPU(object):
 
     # Peform A ^ (HL), place in A
     def xorhl(self):
-        value = self.memory.load(self.r["h"] << 8 | self.r["l"])
+        value = self.memory.read(self.r["h"] << 8 | self.r["l"])
 
         self.r["a"] ^= value
 
@@ -497,7 +499,7 @@ class CPU(object):
     def xornext(self):
         self.incPC()
 
-        value = self.memory.load(self.r["pc"])
+        value = self.memory.read(self.r["pc"])
 
         self.r["a"] ^= value
 
@@ -712,7 +714,7 @@ class CPU(object):
 
     # Enable interrupts after this instruction has executed
     # TODO Implement this
-    def di(self):
+    def ei(self):
         pass
 
     """ Rotate and shift instructions """
@@ -773,12 +775,29 @@ class CPU(object):
 
         self.r[n] <<= 1
 
-        self.r["a"] = self.set_bit(self.r["a"], 0, bit7)
+        self.r["n"] = self.set_bit(self.r["n"], 0, bit7)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 0
+
+    def rlchl(self):
+        hl = self.memory.read(self.r["h"] << 8 | self.r["l"])
+
+        bit7 = hl & 0x80
+        self.flag["c"] = bit7
+
+        hl <<= 1
+
+        hl = self.set_bit(hl, 0, bit7)
+
+        # Set the flags
+        self.flag["z"] = 1 if hl == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+        self.memory.write(self.r["h"] << 8 | self.r["l"], hl)
 
     # Rotate n left into carry flag
     def rln(self, n):
@@ -791,6 +810,19 @@ class CPU(object):
         self.flag["n"] = 0
         self.flag["h"] = 0
 
+    def rlhl(self):
+        hl = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["c"] = hl & 0x80
+
+        hl <<= 1
+
+        # Set the flags
+        self.flag["z"] = 1 if hl == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+        self.memory.write(self.r["h"] << 8 | self.r["l"], hl)
+
     # Rotate n right into carry flag, replace bit 7 with 0
     def rrcn(self, n):
         bit0 = self.r[n] & 0x01
@@ -798,15 +830,31 @@ class CPU(object):
 
         self.r[n] >>= 1
 
-        self.r["a"] = self.set_bit(self.r["a"], 7, bit0)
+        self.r[n] = self.set_bit(self.r[n], 7, bit0)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 0
 
+    def rrchl(self):
+        hl = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        bit0 = hl & 0x01
+        self.flag["c"] = bit0
+
+        hl >>= 1
+
+        hl = self.set_bit(hl, 7, bit0)
+
+        # Set the flags
+        self.flag["z"] = 1 if hl == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+        self.memory.write(self.r["h"] << 8 | self.r["l"], hl)
+
     # Rotate n right into carry flag
-    def rra(self, n):
+    def rrn(self, n):
         self.flag["c"] = self.r[n] & 0x01
 
         self.r[n] <<= 1
@@ -816,18 +864,48 @@ class CPU(object):
         self.flag["n"] = 0
         self.flag["h"] = 0
 
+    def rrhl(self):
+        hl = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["c"] = hl & 0x01
+
+        hl <<= 1
+
+        # Set the flags
+        self.flag["z"] = 1 if hl == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+        self.memory.write(self.r["h"] << 8 | self.r["l"], hl)
+
+
     # Shift n left into carry flag, LSB of n is set to 0
     def slan(self, n):
         self.flag["c"] = self.r[n] & 0x80
 
         self.r[n] <<= 1
 
-        self.r["a"] = self.set_bit(self.r["a"], 0, 0)
+        self.r[n] = self.set_bit(self.r[n], 0, 0)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 0
+
+    def slahl(self):
+        hl = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["c"] = hl & 0x80
+
+        hl <<= 1
+
+        hl = self.set_bit(hl, 0, 0)
+
+        # Set the flags
+        self.flag["z"] = 1 if hl == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+        self.memory.write(self.r["h"] << 8 | self.r["l"], hl)
+
 
     # Shift n right into carry, replace the MSB with the previous one?
     def sran(self, n):
@@ -836,12 +914,28 @@ class CPU(object):
 
         self.r[n] >>= 1
 
-        self.r["a"] = self.set_bit(self.r["a"], 7, msb)
+        self.r[n] = self.set_bit(self.r[n], 7, msb)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 0
+
+    def srahl(self):
+        hl = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["c"] = hl & 0x01
+        msb = (hl & 0x80) >> 7
+
+        hl >>= 1
+
+        hl = self.set_bit(hl, 7, msb)
+
+        # Set the flags
+        self.flag["z"] = 1 if hl == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+        self.memory.write(self.r["h"] << 8 | self.r["l"], hl)
 
     # Shift n right into carry, set the msb to 0
     def srln(self, n):
@@ -849,12 +943,27 @@ class CPU(object):
 
         self.r[n] >>= 1
 
-        self.r["a"] = self.set_bit(self.r["a"], 7, 0)
+        self.r[n] = self.set_bit(self.r[n], 7, 0)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 0
+
+    def srlhl(self):
+        hl = self.memory.read(self.r["h"] << 8 | self.r["l"])
+        self.flag["c"] = hl & 0x01
+
+        hl >>= 1
+
+        hl = self.set_bit(hl, 7, 0)
+
+        # Set the flags
+        self.flag["z"] = 1 if hl == 0 else 0
+        self.flag["n"] = 0
+        self.flag["h"] = 0
+
+        self.memory.write(self.r["h"] << 8 | self.r["l"], hl)
 
     """ Bit Opcodes """
     # Test bit b in register r
@@ -874,7 +983,7 @@ class CPU(object):
 
     def resbr(self, b, r):
         # Set the bit
-        self.r[r] = self.set_bit(self.r[r], b, 1)
+        self.r[r] = self.set_bit(self.r[r], b, 0)
 
     """ Jump Operations """
     # Jump to address nn
@@ -1124,15 +1233,398 @@ class CPU(object):
 
         # TODO: Enable interrupts
 
+    def cbtable(self, opcode):
+        self.incPC()
+
+        lookup = {
+            0x37: (self.swapn, ["a"]),
+            0x30: (self.swapn, ["b"]),
+            0x31: (self.swapn, ["c"]),
+            0x32: (self.swapn, ["d"]),
+            0x33: (self.swapn, ["e"]),
+            0x34: (self.swapn, ["h"]),
+            0x35: (self.swapn, ["l"]),
+            0x36: (self.swaphl, []),
+
+            0x07: (self.rlcn, ["a"]),
+            0x00: (self.rlcn, ["b"]),
+            0x01: (self.rlcn, ["c"]),
+            0x02: (self.rlcn, ["d"]),
+            0x03: (self.rlcn, ["e"]),
+            0x04: (self.rlcn, ["h"]),
+            0x05: (self.rlcn, ["l"]),
+            0x06: (self.rlchl, []),
+
+            0x17: (self.rln, ["a"]),
+            0x10: (self.rln, ["b"]),
+            0x11: (self.rln, ["c"]),
+            0x12: (self.rln, ["d"]),
+            0x13: (self.rln, ["e"]),
+            0x14: (self.rln, ["h"]),
+            0x15: (self.rln, ["l"]),
+            0x16: (self.rlhl, []),
+
+            0x0F: (self.rrcn, ["a"]),
+            0x08: (self.rrcn, ["b"]),
+            0x09: (self.rrcn, ["c"]),
+            0x0A: (self.rrcn, ["d"]),
+            0x0B: (self.rrcn, ["e"]),
+            0x0C: (self.rrcn, ["h"]),
+            0x0D: (self.rrcn, ["l"]),
+            0x0E: (self.rrchl, []),
+
+            0x1F: (self.rrn, ["a"]),
+            0x18: (self.rrn, ["b"]),
+            0x19: (self.rrn, ["c"]),
+            0x1A: (self.rrn, ["d"]),
+            0x1B: (self.rrn, ["e"]),
+            0x1C: (self.rrn, ["h"]),
+            0x1D: (self.rrn, ["l"]),
+            0x1E: (self.rrhl, []),
+
+            0x27: (self.slan, ["a"]),
+            0x20: (self.slan, ["b"]),
+            0x21: (self.slan, ["c"]),
+            0x22: (self.slan, ["d"]),
+            0x23: (self.slan, ["e"]),
+            0x24: (self.slan, ["h"]),
+            0x25: (self.slan, ["l"]),
+            0x26: (self.slahl, []),
+
+            0x2F: (self.sran, ["a"]),
+            0x28: (self.sran, ["b"]),
+            0x29: (self.sran, ["c"]),
+            0x2A: (self.sran, ["d"]),
+            0x2B: (self.sran, ["e"]),
+            0x2C: (self.sran, ["h"]),
+            0x2D: (self.sran, ["l"]),
+            0x2E: (self.srahl, []),
+
+            0x3F: (self.srln, ["a"]),
+            0x38: (self.srln, ["b"]),
+            0x39: (self.srln, ["c"]),
+            0x3A: (self.srln, ["d"]),
+            0x3B: (self.srln, ["e"]),
+            0x3C: (self.srln, ["h"]),
+            0x3D: (self.srln, ["l"]),
+            0x3E: (self.srahl, []),
+        }
+
+        function = lookup[opcode]
+
+        function[0](*function[1])
+
     # Opcode Maps
     def executeOpcode(self, opcode):
         map = {
-            0x06: (self.ldnnn, "b"),
-            0x0E: (self.ldnnn, "c"),
-            0x16: (self.ldnnn, "d"),
-            0x1E: (self.ldnnn, "e"),
-            0x26: (self.ldnnn, "h"),
-            0x2E: (self.ldnnn, "l")
+            # LD nn, n
+            0x06: (self.ldnnn, ["b"]),
+            0x0E: (self.ldnnn, ["c"]),
+            0x16: (self.ldnnn, ["d"]),
+            0x1E: (self.ldnnn, ["e"]),
+            0x26: (self.ldnnn, ["h"]),
+            0x2E: (self.ldnnn, ["l"]),
+
+            # LD r1, r2
+            0x7F: (self.ldr1r2, ["a", "a"]),
+            0x78: (self.ldr1r2, ["a", "b"]),
+            0x79: (self.ldr1r2, ["a", "c"]),
+            0x7A: (self.ldr1r2, ["a", "d"]),
+            0x7B: (self.ldr1r2, ["a", "e"]),
+            0x7C: (self.ldr1r2, ["a", "h"]),
+            0x7D: (self.ldr1r2, ["a", "l"]),
+            0x7E: (self.ldr1hl, ["a"]),
+            0x40: (self.ldr1r2, ["b", "b"]),
+            0x41: (self.ldr1r2, ["b", "c"]),
+            0x42: (self.ldr1r2, ["b", "d"]),
+            0x43: (self.ldr1r2, ["b", "e"]),
+            0x44: (self.ldr1r2, ["b", "h"]),
+            0x45: (self.ldr1r2, ["b", "l"]),
+            0x46: (self.ldr1hl, ["b"]),
+            0x48: (self.ldr1r2, ["c", "b"]),
+            0x49: (self.ldr1r2, ["c", "c"]),
+            0x4A: (self.ldr1r2, ["c", "d"]),
+            0x4B: (self.ldr1r2, ["c", "e"]),
+            0x4C: (self.ldr1r2, ["c", "h"]),
+            0x4D: (self.ldr1r2, ["c", "l"]),
+            0x4E: (self.ldr1hl, ["c"]),
+            0x50: (self.ldr1r2, ["d", "b"]),
+            0x51: (self.ldr1r2, ["d", "c"]),
+            0x52: (self.ldr1r2, ["d", "d"]),
+            0x53: (self.ldr1r2, ["d", "e"]),
+            0x54: (self.ldr1r2, ["d", "h"]),
+            0x55: (self.ldr1r2, ["d", "l"]),
+            0x56: (self.ldr1hl, ["d"]),
+            0x58: (self.ldr1r2, ["e", "b"]),
+            0x59: (self.ldr1r2, ["e", "c"]),
+            0x5A: (self.ldr1r2, ["e", "d"]),
+            0x5B: (self.ldr1r2, ["e", "e"]),
+            0x5C: (self.ldr1r2, ["e", "h"]),
+            0x5D: (self.ldr1r2, ["e", "l"]),
+            0x5E: (self.ldr1hl, ["e"]),
+            0x60: (self.ldr1r2, ["h", "b"]),
+            0x61: (self.ldr1r2, ["h", "c"]),
+            0x62: (self.ldr1r2, ["h", "d"]),
+            0x63: (self.ldr1r2, ["h", "e"]),
+            0x64: (self.ldr1r2, ["h", "h"]),
+            0x65: (self.ldr1r2, ["h", "l"]),
+            0x66: (self.ldr1hl, ["h"]),
+            0x68: (self.ldr1r2, ["l", "b"]),
+            0x69: (self.ldr1r2, ["l", "c"]),
+            0x6A: (self.ldr1r2, ["l", "d"]),
+            0x6B: (self.ldr1r2, ["l", "e"]),
+            0x6C: (self.ldr1r2, ["l", "h"]),
+            0x6D: (self.ldr1r2, ["l", "l"]),
+            0x6E: (self.ldr1hl, ["l"]),
+            0x70: (self.ldhlr2, ["b"]),
+            0x71: (self.ldhlr2, ["c"]),
+            0x72: (self.ldhlr2, ["d"]),
+            0x73: (self.ldhlr2, ["e"]),
+            0x74: (self.ldhlr2, ["h"]),
+            0x75: (self.ldhlr2, ["l"]),
+            0x36: (self.ldhln, []),
+
+            # LD A, n
+            0x0A: (self.ldab, ["b", "c"]),
+            0x1A: (self.ldab, ["d", "e"]),
+            0xFA: (self.ldann, []),
+            0x3E: (self.ldae, []),
+
+            # LD n, A
+            0x47: (self.ldna, ["b"]),
+            0x4F: (self.ldna, ["c"]),
+            0x57: (self.ldna, ["d"]),
+            0x5F: (self.ldna, ["e"]),
+            0x67: (self.ldna, ["h"]),
+            0x6F: (self.ldna, ["l"]),
+            0x02: (self.ldaba, ["b", "c"]),
+            0x12: (self.ldaba, ["d", "e"]),
+            0x77: (self.ldaba, ["h", "l"]),
+            0xEA: (self.ldnna, []),
+
+            # LD A,(C)
+            0xF2: (self.ldac, []),
+
+            # LD (C), A
+            0xE2: (self.ldca, []),
+
+            # LDD A, (HL)
+            0x3A: (self.lddahl, []),
+
+            # LDD (HL), A
+            0x32: (self.lddhla, []),
+
+            # LDI A, (HL)
+            0x2A: (self.ldiahl, []),
+
+            # LDI (HL), A
+            0x22: (self.ldihla, []),
+
+            # LDH (n), A
+            0xE0: (self.ldhan, []),
+
+            # LDH A, (n)
+            0xF0: (self.ldhan, []),
+
+            # LD n, nn
+            0x01: (self.ldnnn16, ["b", "c"]),
+            0x11: (self.ldnnn16, ["d", "e"]),
+            0x21: (self.ldnnn16, ["h", "l"]),
+            0x31: (self.ldnnsp, []),
+
+            # LD SP, HL
+            0xF9: (self.ldsphl, []),
+
+            # LDHL SP, n
+            0xF8: (self.ldhlspn, []),
+
+            # LD (nn), SP
+            0x08: (self.ldnnsp, []),
+
+            # PUSH nn
+            0xF5: (self.pushnn, ["a", "f"]),
+            0xC5: (self.pushnn, ["b", "c"]),
+            0xD5: (self.pushnn, ["d", "e"]),
+            0xE5: (self.pushnn, ["h", "l"]),
+
+            # POP nn
+            0xF1: (self.popnn, ["a", "f"]),
+            0xC1: (self.popnn, ["b", "c"]),
+            0xD1: (self.popnn, ["d", "e"]),
+            0xE1: (self.popnn, ["h", "l"]),
+
+            # ADD A, n
+            0x87: (self.addan, ["a"]),
+            0x80: (self.addan, ["b"]),
+            0x81: (self.addan, ["c"]),
+            0x82: (self.addan, ["d"]),
+            0x83: (self.addan, ["e"]),
+            0x84: (self.addan, ["h"]),
+            0x85: (self.addan, ["l"]),
+            0x86: (self.addahl, []),
+            0xC6: (self.addanext, []),
+
+            # ADC A, n
+            0x8F: (self.adcan, ["a"]),
+            0x88: (self.adcan, ["b"]),
+            0x89: (self.adcan, ["c"]),
+            0x8A: (self.adcan, ["d"]),
+            0x8B: (self.adcan, ["e"]),
+            0x8C: (self.adcan, ["h"]),
+            0x8D: (self.adcan, ["l"]),
+            0x8E: (self.adcahl, []),
+            0xCE: (self.adcanext, []),
+
+            # SUB n
+            0x97: (self.subn, ["a"]),
+            0x90: (self.subn, ["b"]),
+            0x91: (self.subn, ["c"]),
+            0x92: (self.subn, ["d"]),
+            0x93: (self.subn, ["e"]),
+            0x94: (self.subn, ["h"]),
+            0x95: (self.subn, ["l"]),
+            0x96: (self.subhl, []),
+            0xD6: (self.subnext, []),
+
+            # SBC A, n
+            0x9F: (self.sbcan, ["a"]),
+            0x98: (self.sbcan, ["b"]),
+            0x99: (self.sbcan, ["c"]),
+            0x9A: (self.sbcan, ["d"]),
+            0x9B: (self.sbcan, ["e"]),
+            0x9C: (self.sbcan, ["h"]),
+            0x9D: (self.sbcan, ["l"]),
+            0x9E: (self.sbcahl, []),
+
+            # AND n
+            0xA7: (self.andn, ["a"]),
+            0xA0: (self.andn, ["b"]),
+            0xA1: (self.andn, ["c"]),
+            0xA2: (self.andn, ["d"]),
+            0xA3: (self.andn, ["e"]),
+            0xA4: (self.andn, ["h"]),
+            0xA5: (self.andn, ["l"]),
+            0xA6: (self.andhl, []),
+            0xE6: (self.andnext, []),
+
+            # OR n
+            0xB7: (self.orn, ["a"]),
+            0xB0: (self.orn, ["b"]),
+            0xB1: (self.orn, ["c"]),
+            0xB2: (self.orn, ["d"]),
+            0xB3: (self.orn, ["e"]),
+            0xB4: (self.orn, ["h"]),
+            0xB5: (self.orn, ["l"]),
+            0xB6: (self.orhl, []),
+            0xF6: (self.ornext, []),
+
+            # XOR n
+            0xAF: (self.xorn, ["a"]),
+            0xA8: (self.xorn, ["b"]),
+            0xA9: (self.xorn, ["c"]),
+            0xAA: (self.xorn, ["d"]),
+            0xAB: (self.xorn, ["e"]),
+            0xAC: (self.xorn, ["h"]),
+            0xAD: (self.xorn, ["l"]),
+            0xAE: (self.xorhl, []),
+            0xEE: (self.xornext, []),
+
+            # CP n
+            0xBF: (self.cpn, ["a"]),
+            0xB8: (self.cpn, ["b"]),
+            0xB9: (self.cpn, ["c"]),
+            0xBA: (self.cpn, ["d"]),
+            0xBB: (self.cpn, ["e"]),
+            0xBC: (self.cpn, ["h"]),
+            0xBD: (self.cpn, ["l"]),
+            0xBE: (self.cphl, []),
+            0xFE: (self.cpnext, []),
+
+            # INC n
+            0x3C: (self.incn, ["a"]),
+            0x04: (self.incn, ["b"]),
+            0x0C: (self.incn, ["c"]),
+            0x14: (self.incn, ["d"]),
+            0x1C: (self.incn, ["e"]),
+            0x24: (self.incn, ["h"]),
+            0x2C: (self.incn, ["l"]),
+            0x34: (self.inchl, []),
+
+            # DEC n
+            0x3D: (self.decn, ["a"]),
+            0x05: (self.decn, ["b"]),
+            0x0D: (self.decn, ["c"]),
+            0x15: (self.decn, ["d"]),
+            0x1D: (self.decn, ["e"]),
+            0x25: (self.decn, ["h"]),
+            0x2D: (self.decn, ["l"]),
+            0x35: (self.dechl, []),
+
+            # ADD HL, n
+            0x09: (self.addhln, ["b", "c"]),
+            0x19: (self.addhln, ["d", "e"]),
+            0x29: (self.addhln, ["h", "l"]),
+            0x39: (self.addhlsp, []),
+
+            # ADD SP, n
+            0xE8: (self.addspn, []),
+
+            # INC nn
+            0x03: (self.incnn, ["b", "c"]),
+            0x13: (self.incnn, ["d", "e"]),
+            0x23: (self.incnn, ["h", "l"]),
+            0x33: (self.incsp, []),
+
+            # DEC nn
+            0x0B: (self.decnn, ["b", "c"]),
+            0x1B: (self.decnn, ["d", "e"]),
+            0x2B: (self.decnn, ["h", "l"]),
+            0x3B: (self.decsp, []),
+
+            # SWAP n
+            # RLC n
+            # RL n
+            0xCB: (self.cbtable, []),
+
+            # DAA
+            0x27: (self.daa, []),
+
+            # CPL
+            0x2F: (self.cpl, []),
+
+            # CCF
+            0x3F: (self.ccf, []),
+
+            # SCF
+            0x37: (self.scf, []),
+
+            # NOP
+            0x00: (self.nop, []),
+
+            # HALT
+            0x76: (self.halt, []),
+
+            # STOP
+            0x10: (self.stop, []),
+
+            # DI
+            0xF3: (self.di, []),
+
+            # EI
+            0xFB: (self.ei, []),
+
+            # RLCA
+            0x07: (self.rlca, []),
+
+            # RLA
+            0x17: (self.rla, []),
+
+            # RRCA
+            0x0F: (self.rrca, []),
+
+            # RRA
+            0x1F: (self.rra, []),
+
         }
 
         function = map[opcode]

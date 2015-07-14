@@ -80,7 +80,7 @@ class MemoryController():
         return 0
 
     def write(self, loc, data):
-        if loc >= 0x2000 and loc <= 0x4000:
+        if loc >= 0x2000 and loc < 0x4000:
             self.currBank = data
         elif loc < 0x8000:
             self.rom[loc] = data
