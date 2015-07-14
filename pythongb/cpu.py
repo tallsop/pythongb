@@ -1124,4 +1124,18 @@ class CPU(object):
 
         # TODO: Enable interrupts
 
+    # Opcode Maps
+    def executeOpcode(self, opcode):
+        map = {
+            0x06: (self.ldnnn, "b"),
+            0x0E: (self.ldnnn, "c"),
+            0x16: (self.ldnnn, "d"),
+            0x1E: (self.ldnnn, "e"),
+            0x26: (self.ldnnn, "h"),
+            0x2E: (self.ldnnn, "l")
+        }
+
+        function = map[opcode]
+        function[0](*function[1])
+
 
