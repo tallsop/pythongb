@@ -1193,7 +1193,7 @@ class CPU(object):
             self.r["pc"] = high << 8 | low
 
     # Return if the Z flag is set
-    def retnz(self):
+    def retz(self):
         if self.flag["z"] == 1:
             low = self.memory.read(self.r["sp"])
             self.addSP(1)
@@ -1203,7 +1203,7 @@ class CPU(object):
             self.r["pc"] = high << 8 | low
 
     # Return if the C flag is reset
-    def retnz(self):
+    def retnc(self):
         if self.flag["C"] == 0:
             low = self.memory.read(self.r["sp"])
             self.addSP(1)
@@ -1213,7 +1213,7 @@ class CPU(object):
             self.r["pc"] = high << 8 | low
 
     # Return if the C flag is set
-    def retnz(self):
+    def retnc(self):
         if self.flag["C"] == 1:
             low = self.memory.read(self.r["sp"])
             self.addSP(1)
@@ -1237,6 +1237,7 @@ class CPU(object):
         self.incPC()
 
         lookup = {
+            # SWAP n
             0x37: (self.swapn, ["a"]),
             0x30: (self.swapn, ["b"]),
             0x31: (self.swapn, ["c"]),
@@ -1246,6 +1247,7 @@ class CPU(object):
             0x35: (self.swapn, ["l"]),
             0x36: (self.swaphl, []),
 
+            # RLC n
             0x07: (self.rlcn, ["a"]),
             0x00: (self.rlcn, ["b"]),
             0x01: (self.rlcn, ["c"]),
@@ -1255,6 +1257,7 @@ class CPU(object):
             0x05: (self.rlcn, ["l"]),
             0x06: (self.rlchl, []),
 
+            # RL n
             0x17: (self.rln, ["a"]),
             0x10: (self.rln, ["b"]),
             0x11: (self.rln, ["c"]),
@@ -1264,6 +1267,7 @@ class CPU(object):
             0x15: (self.rln, ["l"]),
             0x16: (self.rlhl, []),
 
+            # RRC n
             0x0F: (self.rrcn, ["a"]),
             0x08: (self.rrcn, ["b"]),
             0x09: (self.rrcn, ["c"]),
@@ -1273,6 +1277,7 @@ class CPU(object):
             0x0D: (self.rrcn, ["l"]),
             0x0E: (self.rrchl, []),
 
+            # RR n
             0x1F: (self.rrn, ["a"]),
             0x18: (self.rrn, ["b"]),
             0x19: (self.rrn, ["c"]),
@@ -1282,6 +1287,7 @@ class CPU(object):
             0x1D: (self.rrn, ["l"]),
             0x1E: (self.rrhl, []),
 
+            # SLA n
             0x27: (self.slan, ["a"]),
             0x20: (self.slan, ["b"]),
             0x21: (self.slan, ["c"]),
@@ -1291,6 +1297,7 @@ class CPU(object):
             0x25: (self.slan, ["l"]),
             0x26: (self.slahl, []),
 
+            # SRA n
             0x2F: (self.sran, ["a"]),
             0x28: (self.sran, ["b"]),
             0x29: (self.sran, ["c"]),
@@ -1300,6 +1307,7 @@ class CPU(object):
             0x2D: (self.sran, ["l"]),
             0x2E: (self.srahl, []),
 
+            # SRL n
             0x3F: (self.srln, ["a"]),
             0x38: (self.srln, ["b"]),
             0x39: (self.srln, ["c"]),
@@ -1308,6 +1316,8 @@ class CPU(object):
             0x3C: (self.srln, ["h"]),
             0x3D: (self.srln, ["l"]),
             0x3E: (self.srahl, []),
+
+            # BIT/SET/RES b,r (unimplemented)
         }
 
         function = lookup[opcode]
@@ -1625,6 +1635,57 @@ class CPU(object):
             # RRA
             0x1F: (self.rra, []),
 
+            # JP nn
+            0xC3: (self.jpnn, []),
+
+            # JP cc, nn
+            0xC2: (self.jpnznn, []),
+            0xCA: (self.jpznn, []),
+            0xD2: (self.jpncnn, []),
+            0xDA: (self.jpcnn, []),
+
+            # JP (HL)
+            0xE9: (self.jphl, []),
+
+            # JR n
+            0x18: (self.jrn, []),
+
+            # JR cc, n
+            0x20: (self.jrnzn, []),
+            0x28: (self.jrzn, []),
+            0x30: (self.jrncn, []),
+            0x38: (self.jrcn, []),
+
+            # CALL nn
+            0xCD: (self.callnn, []),
+
+            # CALL cc, nn
+            0xC4: (self.callnznn, []),
+            0xCC: (self.callznn, []),
+            0xD4: (self.callncnn, []),
+            0xDC: (self.callcnn, []),
+
+            # RST n
+            0xC7: (self.rstn, [0x00]),
+            0xCF: (self.rstn, [0x08]),
+            0xD7: (self.rstn, [0x10]),
+            0xDF: (self.rstn, [0x18]),
+            0xE7: (self.rstn, [0x20]),
+            0xEF: (self.rstn, [0x28]),
+            0xF7: (self.rstn, [0x30]),
+            0xFF: (self.rstn, [0x38]),
+
+            # RET
+            0xC9: (self.ret, []),
+
+            # RET cc
+            0xC0: (self.retnz, []),
+            0xC8: (self.retz, []),
+            0xD0: (self.retnc, []),
+            0xD8: (self.retc, []),
+
+            # RETI
+            0xD9: (self.reti, [])
         }
 
         function = map[opcode]
