@@ -4,7 +4,7 @@ Memory Map
 """
 
 
-class MemoryController():
+class MemoryController(object):
     bios = [0x31, 0xfe, 0xff, 0xaf, 0x21, 0xff, 0x9f, 0x32, 0xcb,
             0x7c, 0x20, 0xfb, 0x21, 0x26, 0xff, 0x0e, 0x11, 0x3e,
             0x80, 0x32, 0xe2, 0x0c, 0x3e, 0xf3, 0xe2, 0x32, 0x3e,
@@ -36,22 +36,31 @@ class MemoryController():
             0x3e, 0x01, 0xe0, 0x50]
 
     def __init__(self):
-        self.currBank = 1
         self.bios_use = True
 
-        self.rom = bytearray(0x8000)  # 0x0000 - 0x8000
+        # ROM Only - 0, MBC1 - 1, MBC2 - 2, MBC3 - 3, MB5 - 5
+        self.banking_type = 0
+
+        # Select the bank in the ROM
+        self.curr_bank = 1
+
+        # 0 - 16Mbit ROM 8KByte RAM and 1 - Select 4Mbit ROM 32KByte RAM
+        self.memory_model = 0
+
+        self.disable_eram = False
+        self.eram_bank = 0
+
+        self.rom = bytearray(0x8000)  # 0x0000 - 0x8000 (Override with game rom)
         self.vram = bytearray(0xA000 - 0x8000)  # 0x8000 - 0xA000
-        self.eram = bytearray(0xC000 - 0xA000)  # 0xA000 - 0xC000
-        self.wram = bytearray(
-            0xE000 -
-            0xC000)  # 0xC000 - 0xE000 Echoed to: 0xE000 - 0xFE00
+        self.eram = bytearray((0xC000 - 0xA000) + 0x2000 * 3)  # 0xA000 - 0xC000 (Extra if the eram is banked)
+        self.wram = bytearray(0xE000 - 0xC000)  # 0xC000 - 0xE000 Echoed to: 0xE000 - 0xFE00
         self.oam = bytearray(0xFEA0 - 0xFE00)  # 0xFE00 - 0xFEA0
         # 0xFEA0 - 0xFF00 Unused
         self.io = bytearray(0xFF4C - 0xFF00)  # 0xFF00- 0xFF4C
         # 0xFF4C - 0xFF80 is empty
         self.ram = bytearray(0xFFFF - 0xFF80)  # 0xFF80 - 0xFFFF
 
-    def read(self, loc):
+    def read0(self, loc):
         # At the start of the emulation the bios is in use
         if self.bios_use:
             if (loc - 0x100) >= len(MemoryController.bios) - 1:
@@ -79,14 +88,99 @@ class MemoryController():
 
         return 0
 
-    def write(self, loc, data):
-        if loc >= 0x2000 and loc < 0x4000:
-            self.currBank = data
+    # MBC1 Banking
+    def read1(self, loc):
+        # At the start of the emulation the bios is in use
+        if self.bios_use:
+            if (loc - 0x100) >= len(MemoryController.bios) - 1:
+                self.bios_use = False
+
+            return MemoryController.bios[loc - 0x100]
+        if loc < 0x4000:
+            return self.rom[loc]
         elif loc < 0x8000:
+            return self.rom[loc - 0x4000 + (0x4000 * self.currBank)]
+        elif loc < 0xA000:
+            return self.vram[loc - 0x8000]
+        elif loc < 0xC000:
+            return self.eram[loc - 0xA000 + (0x2000 * self.eram_bank)]
+        elif loc < 0xE000:
+            return self.wram[loc - 0xC000]
+        elif loc < 0xFE00:
+            return self.wram[loc - 0xE000]
+        elif loc < 0xFEA0:
+            return self.oam[loc - 0xFE00]
+        elif loc < 0xFF4C:
+            return self.io[loc - 0xFF00]
+        elif loc < 0xFFFF:
+            return self.ram[loc - 0xFF80]
+
+        return 0
+
+    def read(self, loc):
+        banking_functions = {
+            0: self.read0,
+            1: self.read1
+        }
+
+        return banking_functions[self.bankingType](loc)
+
+    # ROM Only Banking
+    def write0(self, loc, data):
+        # This is for selecting the appropriate bank
+        if loc < 0x8000:
             self.rom[loc] = data
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
         elif loc < 0xC000:
+            self.eram[loc - 0xA000 + (0x2000 * self.eram_bank)] = data
+        elif loc < 0xE000:
+            self.wram[loc - 0xC000] = data
+        elif loc < 0xFE00:
+            self.wram[loc - 0xE000] = data
+        elif loc < 0xFEA0:
+            self.oam[loc - 0xFE00] = data
+        elif loc < 0xFF4C:
+            self.io[loc - 0xFF00] = data
+        elif loc < 0xFFFF:
+            self.ram[loc - 0xFF80] = data
+
+    # MBC1 Banking
+    def write1(self, loc, data):
+        if 0x0000 <= loc < 0x2000:
+            if loc & 0x0A:
+                self.disable_eram = False
+            else:
+                self.disable_eram = True
+
+        elif 0x2000 <= loc < 0x4000:
+            # Take 0bXXXBBBBB where B = bank select bits
+            # This will select a bank for 0x4000 - 0x7FFF to map to in ROM
+            bank = loc & 0b00011111
+
+            # Now map the bank on info we know
+            # 0 and 1 map to bank 1
+
+            # 0x20, 0x40 and 0x60 are unused, created 125 banks
+            if bank == 0:
+                self.currBank = 1
+            elif bank == 0x20 or bank == 0x40 or bank == 0x60:
+                # Select the next bank
+                self.currBank = bank + 0x01
+            else:
+                self.currBank = bank
+
+        elif 0x4000 <= loc < 0x6000:
+            # RAM bank select
+            self.eram_bank = data & 0b00000011
+
+        elif 0x6000 <= loc < 0x8000:
+            # Take the last bit and select the memory model
+            self.memory_model = loc & 0x01
+        elif loc < 0xA000:
+            self.vram[loc - 0x8000] = data
+        elif loc < 0xC000:
+            # Holds the external ram available in the cart
             self.eram[loc - 0xA000] = data
         elif loc < 0xE000:
             self.wram[loc - 0xC000] = data
@@ -99,12 +193,28 @@ class MemoryController():
         elif loc < 0xFFFF:
             self.ram[loc - 0xFF80] = data
 
+    # A function for each banking type
+    # This was chosen as multiple if statements would impact performance
+
+    def write(self, loc, data):
+        # Map the bankingType to a dictionary function
+        bankingFunctions = {
+            0: self.write0,
+            1: self.write1
+        }
+
+        # Execute the appropriate banking function
+        bankingFunctions[self.bankingType](loc, data)
+
     def readROM(self, rom):
         # Put the ROM into memory
         stream = open(rom, "rb")
 
         romArray = bytearray(stream.read())
         stream.close()
+
+        # Firstly read the memory banking type
+        cartType = romArray[0x147]
 
         # Place this in memory
         self.rom = romArray

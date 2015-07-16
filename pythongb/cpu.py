@@ -1213,7 +1213,7 @@ class CPU(object):
             self.r["pc"] = high << 8 | low
 
     # Return if the C flag is set
-    def retnc(self):
+    def retc(self):
         if self.flag["C"] == 1:
             low = self.memory.read(self.r["sp"])
             self.addSP(1)
