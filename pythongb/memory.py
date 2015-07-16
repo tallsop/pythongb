@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 Memory Map
 ------------
@@ -50,9 +51,21 @@ class MemoryController(object):
         self.disable_eram = False
         self.eram_bank = 0
 
+        self.disable_rtc = False
+        self.map_rtc = False
+
+        self.latch_rtc = 0
+
+        # Time Registers
+        self.seconds = 0
+        self.minutes = 0
+        self.hours = 0
+        self.days = 0
+        self.flags = 0
+
         self.rom = bytearray(0x8000)  # 0x0000 - 0x8000 (Override with game rom)
         self.vram = bytearray(0xA000 - 0x8000)  # 0x8000 - 0xA000
-        self.eram = bytearray((0xC000 - 0xA000) + 0x2000 * 3)  # 0xA000 - 0xC000 (Extra if the eram is banked)
+        self.eram = bytearray((0xC000 - 0xA000) + 0x2000 * 0x0F)  # 0xA000 - 0xC000 (Extra if the eram is banked)
         self.wram = bytearray(0xE000 - 0xC000)  # 0xC000 - 0xE000 Echoed to: 0xE000 - 0xFE00
         self.oam = bytearray(0xFEA0 - 0xFE00)  # 0xFE00 - 0xFEA0
         # 0xFEA0 - 0xFF00 Unused
@@ -117,13 +130,107 @@ class MemoryController(object):
 
         return 0
 
+    # MBC2 Banking
+    def read2(self, loc):
+        # At the start of the emulation the bios is in use
+        if self.bios_use:
+            if (loc - 0x100) >= len(MemoryController.bios) - 1:
+                self.bios_use = False
+
+            return MemoryController.bios[loc - 0x100]
+        if loc < 0x4000:
+            return self.rom[loc]
+        elif loc < 0x8000:
+            return self.rom[loc - 0x4000 + (0x4000 * self.currBank)]
+        elif loc < 0xA000:
+            return self.vram[loc - 0x8000]
+        elif loc < 0xC000:
+            return self.eram[loc - 0xA000] & 0x00FF  # Only lower 4 bits are used
+        elif loc < 0xE000:
+            return self.wram[loc - 0xC000]
+        elif loc < 0xFE00:
+            return self.wram[loc - 0xE000]
+        elif loc < 0xFEA0:
+            return self.oam[loc - 0xFE00]
+        elif loc < 0xFF4C:
+            return self.io[loc - 0xFF00]
+        elif loc < 0xFFFF:
+            return self.ram[loc - 0xFF80]
+
+        return 0
+
+    # MBC3 Banking
+    def read3(self, loc):
+        # At the start of the emulation the bios is in use
+        if self.bios_use:
+            if (loc - 0x100) >= len(MemoryController.bios) - 1:
+                self.bios_use = False
+
+            return MemoryController.bios[loc - 0x100]
+        if loc < 0x4000:
+            return self.rom[loc]
+        elif loc < 0x8000:
+            return self.rom[loc - 0x4000 + (0x4000 * self.currBank)]
+        elif loc < 0xA000:
+            return self.vram[loc - 0x8000]
+        elif loc < 0xC000:
+            if not self.disable_eram:
+                if not self.map_rtc:
+                    return self.eram[loc - 0xA000 + (0x2000 * self.eram_bank)]
+                else:
+                    # TODO: Implement the register mappings
+        elif loc < 0xE000:
+            return self.wram[loc - 0xC000]
+        elif loc < 0xFE00:
+            return self.wram[loc - 0xE000]
+        elif loc < 0xFEA0:
+            return self.oam[loc - 0xFE00]
+        elif loc < 0xFF4C:
+            return self.io[loc - 0xFF00]
+        elif loc < 0xFFFF:
+            return self.ram[loc - 0xFF80]
+
+        return 0
+
+    # MBC5 Banking
+    def read5(self, loc):
+        # At the start of the emulation the bios is in use
+        if self.bios_use:
+            if (loc - 0x100) >= len(MemoryController.bios) - 1:
+                self.bios_use = False
+
+            return MemoryController.bios[loc - 0x100]
+        if loc < 0x4000:
+            return self.rom[loc]
+        elif loc < 0x8000:
+            return self.rom[loc - 0x4000 + (0x4000 * self.currBank)]
+        elif loc < 0xA000:
+            return self.vram[loc - 0x8000]
+        elif loc < 0xC000:
+            return self.eram[loc - 0xA000] & 0x00FF  # Only lower 4 bits are used
+        elif loc < 0xE000:
+            return self.wram[loc - 0xC000]
+        elif loc < 0xFE00:
+            return self.wram[loc - 0xE000]
+        elif loc < 0xFEA0:
+            return self.oam[loc - 0xFE00]
+        elif loc < 0xFF4C:
+            return self.io[loc - 0xFF00]
+        elif loc < 0xFFFF:
+            return self.ram[loc - 0xFF80]
+
+        return 0
+
     def read(self, loc):
         banking_functions = {
             0: self.read0,
-            1: self.read1
+            1: self.read1,
+            2: self.read2,
+            3: self.read3,
+            5: self.read5
         }
 
-        return banking_functions[self.bankingType](loc)
+        return banking_functions[self.banking_type](loc)
 
     # ROM Only Banking
     def write0(self, loc, data):
@@ -181,6 +288,55 @@ class MemoryController(object):
             self.vram[loc - 0x8000] = data
         elif loc < 0xC000:
             # Holds the external ram available in the cart
+            self.eram[loc - 0xA000 + (0x2000 * self.eram_bank)] = data
+        elif loc < 0xE000:
+            self.wram[loc - 0xC000] = data
+        elif loc < 0xFE00:
+            self.wram[loc - 0xE000] = data
+        elif loc < 0xFEA0:
+            self.oam[loc - 0xFE00] = data
+        elif loc < 0xFF4C:
+            self.io[loc - 0xFF00] = data
+        elif loc < 0xFFFF:
+            self.ram[loc - 0xFF80] = data
+
+    # MBC2 Banking
+    def write2(self, loc, data):
+        if 0x0000 <= loc < 0x2000:
+            if loc & 0x0A:
+                self.disable_eram = False
+            else:
+                self.disable_eram = True
+
+        elif 0x2000 <= loc < 0x4000:
+            # Take 0bXXXXBBBB where B = bank select bits
+            # This will select a bank for 0x4000 - 0x7FFF to map to in ROM
+            bank = data & 0b00001111
+
+            # Now map the bank on info we know
+            # 0 and 1 map to bank 1
+
+            # 0x20, 0x40 and 0x60 are unused, created 125 banks
+            if bank == 0:
+                self.currBank = 1
+            elif bank == 0x20 or bank == 0x40 or bank == 0x60:
+                # Select the next bank
+                self.currBank = bank + 0x01
+            else:
+                self.currBank = bank
+
+        elif 0x4000 <= loc < 0x6000:
+            # RAM bank select
+            self.eram_bank = data & 0b00000011
+
+        elif 0x6000 <= loc < 0x8000:
+            # Take the last bit and select the memory model
+            # self.memory_model = loc & 0x01
+            pass
+        elif loc < 0xA000:
+            self.vram[loc - 0x8000] = data
+        elif loc < 0xC000:
+            # Holds the external ram available in the cart
             self.eram[loc - 0xA000] = data
         elif loc < 0xE000:
             self.wram[loc - 0xC000] = data
@@ -193,28 +349,130 @@ class MemoryController(object):
         elif loc < 0xFFFF:
             self.ram[loc - 0xFF80] = data
 
-    # A function for each banking type
-    # This was chosen as multiple if statements would impact performance
+    # MBC3 Banking
+    def write3(self, loc, data):
+        if 0x0000 <= loc < 0x2000:
+            if loc & 0x0A:
+                self.disable_eram = False
+                self.disable_rtc = False
+            else:
+                self.disable_eram = True
+                self.disable_rtc = True
+
+        elif 0x2000 <= loc < 0x4000:
+            # Take 0bXXXBBBBB where B = bank select bits
+            # This will select a bank for 0x4000 - 0x7FFF to map to in ROM
+            bank = data
+
+            # Now map the bank on info we know
+            # 0 and 1 map to bank 1
+
+            # 0x20, 0x40 and 0x60 are unused, created 125 banks
+            if bank == 0:
+                self.currBank = 1
+            else:
+                self.currBank = bank
+
+        elif 0x4000 <= loc < 0x6000:
+            # RAM bank select
+            if data <= 3:
+                self.eram_bank = data & 0x0F
+                self.map_rtc = False
+            else:
+                self.map_rtc = True
+
+        elif 0x6000 <= loc < 0x8000:
+            # Writing 0x00 then 0x01, the current time is latched in the rtc registers
+            if data == 0:
+                self.latch_rtc = 1
+            elif data == 1:
+                self.latch_rtc = 2
+
+                # Load the time from the OS clock
+                date = datetime.now()
+                self.seconds = date.second
+                self.minutes = date.minute
+                self.hours = date.hour
+                self.days = date.day
+
+        elif loc < 0xA000:
+            self.vram[loc - 0x8000] = data
+        elif loc < 0xC000:
+            # Holds the external ram available in the cart
+            self.eram[loc - 0xA000 + (0x2000 * self.eram_bank)] = data
+        elif loc < 0xE000:
+            self.wram[loc - 0xC000] = data
+        elif loc < 0xFE00:
+            self.wram[loc - 0xE000] = data
+        elif loc < 0xFEA0:
+            self.oam[loc - 0xFE00] = data
+        elif loc < 0xFF4C:
+            self.io[loc - 0xFF00] = data
+        elif loc < 0xFFFF:
+            self.ram[loc - 0xFF80] = data
+
+    # MBC5 Banking
+    def write5(self, loc, data):
+        # Same as MBC1
+        if 0x0000 <= loc < 0x2000:
+            if loc & 0x0A:
+                self.disable_eram = False
+            else:
+                self.disable_eram = True
+
+        # Holds the lower 8 bits of the ROM bank number
+        elif 0x2000 <= loc < 0x3000:
+            self.currBank &= 0x00  # Remove the lower bits
+            self.currBank |= data
+
+        elif 0x3000 <= loc < 0x4000:
+            self.currBank &= 0x0FF  # Remove the high bit
+            self.currBank |= data << 8
+
+        elif 0x4000 <= loc < 0x6000:
+            # RAM bank select
+            self.eram_bank = data & 0x0F
+
+        elif 0x6000 <= loc < 0x8000:
+            # Take the last bit and select the memory model
+            self.memory_model = loc & 0x01
+        elif loc < 0xA000:
+            self.vram[loc - 0x8000] = data
+        elif loc < 0xC000:
+            # Holds the external ram available in the cart
+            self.eram[loc - 0xA000 + (0x2000 * self.eram_bank)] = data
+        elif loc < 0xE000:
+            self.wram[loc - 0xC000] = data
+        elif loc < 0xFE00:
+            self.wram[loc - 0xE000] = data
+        elif loc < 0xFEA0:
+            self.oam[loc - 0xFE00] = data
+        elif loc < 0xFF4C:
+            self.io[loc - 0xFF00] = data
+        elif loc < 0xFFFF:
+            self.ram[loc - 0xFF80] = data
 
     def write(self, loc, data):
         # Map the bankingType to a dictionary function
-        bankingFunctions = {
+        banking_functions = {
             0: self.write0,
-            1: self.write1
+            1: self.write1,
+            2: self.write2,
+            5: self.write5
         }
 
         # Execute the appropriate banking function
-        bankingFunctions[self.bankingType](loc, data)
+        banking_functions[self.banking_type](loc, data)
 
     def readROM(self, rom):
         # Put the ROM into memory
         stream = open(rom, "rb")
 
-        romArray = bytearray(stream.read())
+        rom_array = bytearray(stream.read())
         stream.close()
 
         # Firstly read the memory banking type
-        cartType = romArray[0x147]
+        cart_type = rom_array[0x147]
 
         # Place this in memory
-        self.rom = romArray
+        self.rom = rom_array
