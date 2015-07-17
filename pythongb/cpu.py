@@ -13,6 +13,7 @@ H - Half carry flag - 2
 C - Carry flag - 3
 """
 
+
 class CPU(object):
     def __init__(self):
         # All values are set to their initial values upon the systems startup
@@ -36,7 +37,7 @@ class CPU(object):
             "h": 0,
             "c": 0
         }
-        self.memory = MemoryController()
+        self.memory = MemoryController(True)  # Set debug on
 
     """ Helper Functions """
     def getHL(self):
@@ -163,13 +164,13 @@ class CPU(object):
 
     # Put the value at (HL) into A. Decrement HL.
     def lddahl(self):
-        self.r = self.memory.read(self.getHL())
+        self.r["a"] = self.memory.read(self.getHL())
         self.addAB("h", "l", -1)
 
     # Put A into address HL, decrement HL
     def lddhla(self):
         self.memory.write(self.getHL(), self.r["a"])
-        self.add("h", "l", -1)
+        self.addAB("h", "l", -1)
 
     # Put value at address HL into A. Increment HL
     def ldiahl(self):
@@ -179,7 +180,7 @@ class CPU(object):
     # Put A into memory location A then increment HL
     def ldihla(self):
         self.memory.write(self.getHL(), self.r["a"])
-        self.add("h", "l", 1)
+        self.addAB("h", "l", 1)
 
     # Put A into address 0xFF00 + n
     def ldhna(self):
@@ -608,7 +609,7 @@ class CPU(object):
         self.r["l"] = final & 0x00FF
 
     # Add SP to HL
-    def addhlsp(self, a, b):
+    def addhlsp(self):
         hl = self.r["h"] << 8 | self.r["l"]
 
         # Set the half carry flag
@@ -775,7 +776,7 @@ class CPU(object):
 
         self.r[n] <<= 1
 
-        self.r["n"] = self.set_bit(self.r["n"], 0, bit7)
+        self.r[n] = self.set_bit(self.r[n], 0, bit7)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
@@ -1204,7 +1205,7 @@ class CPU(object):
 
     # Return if the C flag is reset
     def retnc(self):
-        if self.flag["C"] == 0:
+        if self.flag["c"] == 0:
             low = self.memory.read(self.r["sp"])
             self.addSP(1)
             high = self.memory.read(self.r["sp"])
@@ -1214,7 +1215,7 @@ class CPU(object):
 
     # Return if the C flag is set
     def retc(self):
-        if self.flag["C"] == 1:
+        if self.flag["c"] == 1:
             low = self.memory.read(self.r["sp"])
             self.addSP(1)
             high = self.memory.read(self.r["sp"])
@@ -1233,7 +1234,7 @@ class CPU(object):
 
         # TODO: Enable interrupts
 
-    def cbtable(self, opcode):
+    def cbtable(self):
         self.incPC()
 
         lookup = {
@@ -1315,7 +1316,97 @@ class CPU(object):
             0x3B: (self.srln, ["e"], 8),
             0x3C: (self.srln, ["h"], 8),
             0x3D: (self.srln, ["l"], 8),
-            0x3E: (self.srahl, [], 16),
+            0x3E: (self.srahl, [], 16)
+
+            # BIT/SET/RES b,r (unimplemented)
+        }
+
+        function = lookup[self.r["pc"]]
+
+        function[0](*function[1])
+
+    def cbtable_test(self, opcode):
+        print("Executing: " + str(hex(opcode)))
+        lookup = {
+            # SWAP n
+            0x37: (self.swapn, ["a"], 8),
+            0x30: (self.swapn, ["b"], 8),
+            0x31: (self.swapn, ["c"], 8),
+            0x32: (self.swapn, ["d"], 8),
+            0x33: (self.swapn, ["e"], 8),
+            0x34: (self.swapn, ["h"], 8),
+            0x35: (self.swapn, ["l"], 8),
+            0x36: (self.swaphl, [], 16),
+
+            # RLC n
+            0x07: (self.rlcn, ["a"], 8),
+            0x00: (self.rlcn, ["b"], 8),
+            0x01: (self.rlcn, ["c"], 8),
+            0x02: (self.rlcn, ["d"], 8),
+            0x03: (self.rlcn, ["e"], 8),
+            0x04: (self.rlcn, ["h"], 8),
+            0x05: (self.rlcn, ["l"], 8),
+            0x06: (self.rlchl, [], 16),
+
+            # RL n
+            0x17: (self.rln, ["a"], 8),
+            0x10: (self.rln, ["b"], 8),
+            0x11: (self.rln, ["c"], 8),
+            0x12: (self.rln, ["d"], 8),
+            0x13: (self.rln, ["e"], 8),
+            0x14: (self.rln, ["h"], 8),
+            0x15: (self.rln, ["l"], 8),
+            0x16: (self.rlhl, [], 16),
+
+            # RRC n
+            0x0F: (self.rrcn, ["a"], 8),
+            0x08: (self.rrcn, ["b"], 8),
+            0x09: (self.rrcn, ["c"], 8),
+            0x0A: (self.rrcn, ["d"], 8),
+            0x0B: (self.rrcn, ["e"], 8),
+            0x0C: (self.rrcn, ["h"], 8),
+            0x0D: (self.rrcn, ["l"], 8),
+            0x0E: (self.rrchl, [], 16),
+
+            # RR n
+            0x1F: (self.rrn, ["a"], 8),
+            0x18: (self.rrn, ["b"], 8),
+            0x19: (self.rrn, ["c"], 8),
+            0x1A: (self.rrn, ["d"], 8),
+            0x1B: (self.rrn, ["e"], 8),
+            0x1C: (self.rrn, ["h"], 8),
+            0x1D: (self.rrn, ["l"], 8),
+            0x1E: (self.rrhl, [], 16),
+
+            # SLA n
+            0x27: (self.slan, ["a"], 8),
+            0x20: (self.slan, ["b"], 8),
+            0x21: (self.slan, ["c"], 8),
+            0x22: (self.slan, ["d"], 8),
+            0x23: (self.slan, ["e"], 8),
+            0x24: (self.slan, ["h"], 8),
+            0x25: (self.slan, ["l"], 8),
+            0x26: (self.slahl, [], 16),
+
+            # SRA n
+            0x2F: (self.sran, ["a"], 8),
+            0x28: (self.sran, ["b"], 8),
+            0x29: (self.sran, ["c"], 8),
+            0x2A: (self.sran, ["d"], 8),
+            0x2B: (self.sran, ["e"], 8),
+            0x2C: (self.sran, ["h"], 8),
+            0x2D: (self.sran, ["l"], 8),
+            0x2E: (self.srahl, [], 16),
+
+            # SRL n
+            0x3F: (self.srln, ["a"], 8),
+            0x38: (self.srln, ["b"], 8),
+            0x39: (self.srln, ["c"], 8),
+            0x3A: (self.srln, ["d"], 8),
+            0x3B: (self.srln, ["e"], 8),
+            0x3C: (self.srln, ["h"], 8),
+            0x3D: (self.srln, ["l"], 8),
+            0x3E: (self.srahl, [], 16)
 
             # BIT/SET/RES b,r (unimplemented)
         }
@@ -1687,6 +1778,8 @@ class CPU(object):
             # RETI
             0xD9: (self.reti, [], 8)
         }
+
+        print("Executing: " + str(hex(opcode)))
 
         function = map[opcode]
         function[0](*function[1])
