@@ -27,15 +27,16 @@ class CPU(object):
             "h": 0,
             "l": 0,
             "pc": 0x100,
-            "sp": 0xFFFE,
-            "ime": 1}
+            "sp": 0xFFFE
+        }
 
         # Initially the flag register is 0?
         self.flag = {
             "z": 0,
             "n": 0,
             "h": 0,
-            "c": 0
+            "c": 0,
+            "ime": 1
         }
         self.memory = MemoryController(True)  # Set debug on
 
@@ -708,11 +709,11 @@ class CPU(object):
 
     # Stop interrupts after this instruction has executed
     def di(self):
-        self.r["ime"] = 0
+        self.flag["ime"] = 0
 
     # Enable interrupts after this instruction has executed
     def ei(self):
-        self.r["ime"] = 1
+        self.flag["ime"] = 1
 
     """ Rotate and shift instructions """
     # Rotate A left into carry flag, replace bit 0 with 7
@@ -1228,7 +1229,13 @@ class CPU(object):
 
         self.r["pc"] = high << 8 | low
 
-        self.r["ime"] = 1
+        self.flag["ime"] = 1
+
+    def service_interrupts(self):
+        # Perfom this if an interrupt needs servicing
+        if True:
+            pass
+
 
     def cbtable(self):
         self.incPC()

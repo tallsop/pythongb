@@ -6,6 +6,16 @@ class GameBoy(object):
         # Perform launch operations
 
         # Initialise the CPU
-        cpu = CPU()
+        self.cpu = CPU()
+
+        self.running = True
 
     def run(self):
+        while self.running:
+            # Firstly execute an instruction
+            self.cpu.executeOpcode(self.cpu.memory.read(self.cpu.r["pc"]))
+
+            # Increment the PC
+            self.cpu.incPC()
+
+            # Service any interrupts
