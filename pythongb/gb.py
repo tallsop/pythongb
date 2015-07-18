@@ -9,4 +9,3 @@ class GameBoy(object):
         cpu = CPU()
 
     def run(self):
-        pass

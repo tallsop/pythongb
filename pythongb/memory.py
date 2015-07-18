@@ -38,7 +38,7 @@ class MemoryController(object):
 
     def __init__(self, debug):
         self.debug = debug
-        self.bios_use = False
+        self.bios_use = True
 
         # ROM Only - 0, MBC1 - 1, MBC2 - 2, MBC3 - 3, MB5 - 5
         self.banking_type = 0
@@ -497,6 +497,27 @@ class MemoryController(object):
 
         # Firstly read the memory banking type
         cart_type = rom_array[0x147]
+
+        # Now map this to a memory controller
+        mbc0_values = [0x0, 0x8, 0x9, 0xB, 0xC, 0xD]
+        mbc1_values = [0x1, 0x2, 0x3]
+        mbc2_values = [0x5, 0x6]
+        mbc3_values = [0x12, 0x13]
+        mbc5_values = [0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E]
+
+        if cart_type in mbc0_values:
+            self.banking_type = 0
+        elif cart_type in mbc1_values:
+            self.banking_type = 1
+        elif cart_type in mbc2_values:
+            self.banking_type = 2
+        elif cart_type in mbc3_values:
+            self.banking_type = 3
+        elif cart_type in mbc5_values:
+            self.banking_type = 5
+        else:
+            # Set it to 0 and hope for the best...
+            self.banking_type = 0
 
         # Place this in memory
         self.rom = rom_array

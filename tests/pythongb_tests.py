@@ -85,3 +85,5 @@ def test_cpu():
 
     for n in tests:
         gbcpu.cbtable_test(n)
+
+

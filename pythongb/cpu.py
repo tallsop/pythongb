@@ -89,8 +89,6 @@ class CPU(object):
 
         self.r[nn] = n
 
-
-
     # Place the value in reg r2 into r1
     def ldr1r2(self, r1, r2):
         self.r[r1] = self.r[r2]
@@ -709,14 +707,12 @@ class CPU(object):
         pass
 
     # Stop interrupts after this instruction has executed
-    # TODO Implement this
     def di(self):
-        pass
+        self.r["ime"] = 0
 
     # Enable interrupts after this instruction has executed
-    # TODO Implement this
     def ei(self):
-        pass
+        self.r["ime"] = 1
 
     """ Rotate and shift instructions """
     # Rotate A left into carry flag, replace bit 0 with 7
@@ -1232,7 +1228,7 @@ class CPU(object):
 
         self.r["pc"] = high << 8 | low
 
-        # TODO: Enable interrupts
+        self.r["ime"] = 1
 
     def cbtable(self):
         self.incPC()
