@@ -4,3 +4,8 @@
 
 // PyCharm Ignores
 .idea/
+
+// Build Ignores
+build/
+dist/
+
