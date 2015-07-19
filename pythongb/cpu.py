@@ -36,9 +36,13 @@ class CPU(object):
             "n": 0,
             "h": 0,
             "c": 0,
-            "ime": 1
+            "ime": 1,
+            "if": 0
         }
         self.memory = MemoryController(True)  # Set debug on
+
+        self.clock = 0
+        self.last_clock_inc = 0
 
     """ Helper Functions """
     def getHL(self):
@@ -1231,12 +1235,6 @@ class CPU(object):
 
         self.flag["ime"] = 1
 
-    def service_interrupts(self):
-        # Perfom this if an interrupt needs servicing
-        if True:
-            pass
-
-
     def cbtable(self):
         self.incPC()
 
@@ -1327,6 +1325,9 @@ class CPU(object):
         function = lookup[self.r["pc"]]
 
         function[0](*function[1])
+
+        self.clock += function[2]  # Add the cycles to the clock
+        self.last_clock_inc = function[2]
 
     def cbtable_test(self, opcode):
         print("Executing: " + str(hex(opcode)))
@@ -1786,5 +1787,8 @@ class CPU(object):
 
         function = map[opcode]
         function[0](*function[1])
+
+        self.clock += function[2]  # Add the cycles to the clock
+        self.last_clock_inc = function[2]
 
 
