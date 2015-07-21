@@ -8,7 +8,7 @@ config = {
     'author': 'Thomas Allsop',
     'url': 'https://github.com/tallsop/pythongb',
     'version': '0.1',
-    'install_requires': ['nose', 'PyOpenGL'],
+    'install_requires': ['nose', 'PyOpenGL', 'PIL'],
     'packages': ['pythongb'],
     'scripts': [],
     'name': 'pythongb'

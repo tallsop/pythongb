@@ -1,4 +1,5 @@
 from memory import MemoryController
+from utils import *
 
 """
 Registers are defined as dictionaries as they are hashmaps, they allow for O(1) lookup.
@@ -64,16 +65,6 @@ class CPU(object):
 
     def getFlagAsInt(self):
         return self.flag["z"] << 8 | self.flag["n"] << 7 | self.flag["h"] << 6 | self.flag["c"] << 5
-
-    def set_bit(self, v, index, x):
-        """Set the index:th bit of v to x, and return the new value."""
-        mask = 1 << index
-        v &= ~mask
-
-        if x:
-            v |= mask
-
-        return v
 
     def pushpc(self):
         self.addSP(-1)
@@ -727,7 +718,7 @@ class CPU(object):
 
         self.r["a"] <<= 1
 
-        self.r["a"] = self.set_bit(self.r["a"], 0, bit7)
+        self.r["a"] = set_bit(self.r["a"], 0, bit7)
 
         # Set the flags
         self.flag["z"] = 1 if self.r["a"] == 0 else 0
@@ -752,7 +743,7 @@ class CPU(object):
 
         self.r["a"] >>= 1
 
-        self.r["a"] = self.set_bit(self.r["a"], 7, bit0)
+        self.r["a"] = set_bit(self.r["a"], 7, bit0)
 
         # Set the flags
         self.flag["z"] = 1 if self.r["a"] == 0 else 0
@@ -792,7 +783,7 @@ class CPU(object):
 
         hl <<= 1
 
-        hl = self.set_bit(hl, 0, bit7)
+        hl = set_bit(hl, 0, bit7)
 
         # Set the flags
         self.flag["z"] = 1 if hl == 0 else 0
@@ -832,7 +823,7 @@ class CPU(object):
 
         self.r[n] >>= 1
 
-        self.r[n] = self.set_bit(self.r[n], 7, bit0)
+        self.r[n] = set_bit(self.r[n], 7, bit0)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
@@ -846,7 +837,7 @@ class CPU(object):
 
         hl >>= 1
 
-        hl = self.set_bit(hl, 7, bit0)
+        hl = set_bit(hl, 7, bit0)
 
         # Set the flags
         self.flag["z"] = 1 if hl == 0 else 0
@@ -899,7 +890,7 @@ class CPU(object):
 
         hl <<= 1
 
-        hl = self.set_bit(hl, 0, 0)
+        hl = set_bit(hl, 0, 0)
 
         # Set the flags
         self.flag["z"] = 1 if hl == 0 else 0
@@ -916,7 +907,7 @@ class CPU(object):
 
         self.r[n] >>= 1
 
-        self.r[n] = self.set_bit(self.r[n], 7, msb)
+        self.r[n] = set_bit(self.r[n], 7, msb)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
@@ -930,7 +921,7 @@ class CPU(object):
 
         hl >>= 1
 
-        hl = self.set_bit(hl, 7, msb)
+        hl = set_bit(hl, 7, msb)
 
         # Set the flags
         self.flag["z"] = 1 if hl == 0 else 0
@@ -945,7 +936,7 @@ class CPU(object):
 
         self.r[n] >>= 1
 
-        self.r[n] = self.set_bit(self.r[n], 7, 0)
+        self.r[n] = set_bit(self.r[n], 7, 0)
 
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
@@ -958,7 +949,7 @@ class CPU(object):
 
         hl >>= 1
 
-        hl = self.set_bit(hl, 7, 0)
+        hl = set_bit(hl, 7, 0)
 
         # Set the flags
         self.flag["z"] = 1 if hl == 0 else 0
@@ -981,11 +972,11 @@ class CPU(object):
 
     def setbr(self, b, r):
         # Set the bit
-        self.r[r] = self.set_bit(self.r[r], b, 1)
+        self.r[r] = set_bit(self.r[r], b, 1)
 
     def resbr(self, b, r):
         # Set the bit
-        self.r[r] = self.set_bit(self.r[r], b, 0)
+        self.r[r] = set_bit(self.r[r], b, 0)
 
     """ Jump Operations """
     # Jump to address nn

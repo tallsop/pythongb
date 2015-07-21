@@ -1,6 +1,8 @@
 from cpu import CPU
 from gpu import GPU
 
+import OpenGL.GLUT as glut
+import OpenGL.GL as gl
 
 class GameBoy(object):
     def __init__(self):
@@ -11,6 +13,26 @@ class GameBoy(object):
         self.gpu = GPU(self.cpu.memory)
 
         self.running = True
+
+    def keyboard(self, key, x, y):
+        pass
+
+    def display(self):
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+        gl.glDrawArrays(gl.GL_QUAD_STRIP)
+        glut.glutSwapBuffers()
+
+    def reshape(self, width, height):
+        gl.glViewport(0, 0, width, height)
+
+    def init_window(self):
+        glut.glutInit()
+        glut.glutInitDisplayMode(glut.GLUT_DOUBLE | glut.GLUT_RGBA)
+        glut.glutCreateWindow('PythonGB')
+        glut.glutReshapeWindow(512, 512)
+        glut.glutReshapeFunc(self.reshape)
+        glut.glutDisplayFunc(self.display)
+        glut.glutKeyboardFunc(self.keyboard)
 
     def run(self):
         # Firstly load the ROM
