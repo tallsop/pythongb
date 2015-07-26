@@ -21,7 +21,7 @@ class GPU(object):
         self.line = 0
 
         # Create a 256 x 256 map for the bitmap
-        self.map = Image.new("RGB", (256, 256), "white")
+        self.map = Image.new("RGB", (160, 144), "white")
 
         # GPU Register locations in memory
         self.LCD_CONTROL = 0xFF40
@@ -44,16 +44,92 @@ class GPU(object):
 
         self.DMA_CONTROL = 0xFF46
 
+        # Palette to colour map
+        self.palette_map = {
+            0: (255, 255, 255, 1),
+            1: (192, 192, 192, 1),
+            2: (96, 96, 96, 1),
+            3: (0, 0, 0, 1)
+        }
+
+    # Returns a tile line as an array of coloured pixels
+    def read_tile_line(self, tile, map_start, y):
+        tile_start = tile * 16
+        y_start = y * 2
+
+        top = self.memory.read(map_start + tile_start + y_start)
+        bottom = self.memory.read(map_start + tile_start + y_start + 1)
+
+        tile = []
+
+        for i in range(8):
+            mask = 0b10000000 >> i
+            pixel = ((bottom & mask) >> 7 - i) << 1 | (top & mask) >> 7 - i
+
+            tile.append(self.palette_map[pixel])
+
+        return tile
+
     def get_line(self):
+        # Define the palette map
+        pal = self.memory.read(self.PALETTE)
+        palette = (pal & 0b11, (pal & 0b1100) >> 2, (pal & 0b110000) >> 4, (pal & 0b11000000) >> 6)
+
+        # First decide if the window is being used or not
+        window = True if (self.memory.read(self.LCD_CONTROL) & 0b00100000) >> 5 == 1 else False
+
+        if window:
+            tile_map_start = 0x8C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
+        else:
+            tile_map_start = None
+
         # Decide which map to use
-        map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
+        map_start = 0x8C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
 
         # Read the appropriate line
         y_start = self.line
 
-        # Read the line
-        
+        # Also need to adjust to the LCD x and y shift
+        y_offset = ((y_start + self.memory.read(self.SCROLL_Y)) >> 3) << 5
+        x_offset = self.memory.read(self.SCROLL_X) >> 3
 
+        # Now read a tile
+        tile = self.memory.read(map_start + y_offset + x_offset)
+
+        # Since the window tiles are -128 - 128 map to 0 - 255
+        if window:
+            if tile >= 128:
+                tile -= 128
+            elif tile < 128:
+                tile += 128
+
+        x = x_offset
+
+        # Read the line
+        for i in xrange(160):
+            loaded_tile = self.read_tile_line(tile, tile_map_start, self.line)
+            self.map[x, self.line] = loaded_tile[x]
+
+            x += 1
+
+            if x == 8:
+                x = 0
+                y_offset += 1
+
+                window = True if (self.memory.read(self.LCD_CONTROL) & 0b00100000) >> 5 == 1 else False
+
+                if window:
+                    tile_map_start = 0x8C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
+                else:
+                    tile_map_start = None
+
+                tile = self.memory.read(map_start + y_offset + x_offset)
+
+                if window:
+                    if tile >= 128:
+                        tile -= 128
+                    elif tile < 128:
+                        tile += 128
 
 
     # This function syncs the GPU with the CPUs clock
