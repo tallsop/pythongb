@@ -161,10 +161,15 @@ class GPU(object):
         elif self.mode == 0:
             if self.clock >= 51:
                 self.clock = 0
-                self.line += 1
 
+                # Draw a line!
+                self.get_line()
+
+                self.line += 1
                 # Write the current line to the register
                 self.memory.write(self.LCD_Y_LINE, self.line)
+
+
 
                 if self.line == 143:
                     # Perform a VBlank
@@ -172,7 +177,8 @@ class GPU(object):
                     self.line = 0
 
                     # Push the image to be rendered
-                    # TODO: Render the screen
+                    # For testing purposes, just place it in a PIL container
+                    map.show()
                 else:
                     # Move to VRAM access
                     self.mode = 2

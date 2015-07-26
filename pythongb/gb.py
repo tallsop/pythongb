@@ -34,8 +34,9 @@ class GameBoy(object):
         glut.glutDisplayFunc(self.display)
         glut.glutKeyboardFunc(self.keyboard)
 
-    def run(self):
+    def run(self, rom_path):
         # Firstly load the ROM
+        self.cpu.memory.read_rom(rom_path)
 
         while self.running:
             # Firstly execute an instruction

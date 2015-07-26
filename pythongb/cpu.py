@@ -962,7 +962,17 @@ class CPU(object):
     # Test bit b in register r
     def bitbr(self, b, r):
         # Get this bit
-        bit = (self.r[r] >> (b - 1)) & 0x01
+        bit = (self.r[r] >> b) & 0x01
+
+        # Set the flags
+        if bit == 0:
+            self.flag["z"] = 1
+        self.flag["n"] = 0
+        self.flag["h"] = 1
+
+    def bitbhl(self, b):
+        # Get this bit
+        bit = (((self.r["h"] << 8) | self.r["l"]) >> b) & 0x01
 
         # Set the flags
         if bit == 0:
@@ -1308,12 +1318,228 @@ class CPU(object):
             0x3B: (self.srln, ["e"], 8),
             0x3C: (self.srln, ["h"], 8),
             0x3D: (self.srln, ["l"], 8),
-            0x3E: (self.srahl, [], 16)
+            0x3E: (self.srahl, [], 16),
 
-            # BIT/SET/RES b,r (unimplemented)
+            # BIT b, r
+            0x40: (self.bitbr(0, "b")),
+            0x41: (self.bitbr(0, "c")),
+            0x42: (self.bitbr(0, "d")),
+            0x43: (self.bitbr(0, "e")),
+            0x44: (self.bitbr(0, "h")),
+            0x45: (self.bitbr(0, "l")),
+            0x46: (self.bitbhl(0)),
+            0x47: (self.bitbr(0, "a")),
+
+            0x48: (self.bitbr(1, "b")),
+            0x49: (self.bitbr(1, "c")),
+            0x4A: (self.bitbr(1, "d")),
+            0x4B: (self.bitbr(1, "e")),
+            0x4C: (self.bitbr(1, "h")),
+            0x4D: (self.bitbr(1, "l")),
+            0x4E: (self.bitbhl(1)),
+            0x4F: (self.bitbr(1, "a")),
+
+            0x50: (self.bitbr(2, "b")),
+            0x51: (self.bitbr(2, "c")),
+            0x52: (self.bitbr(2, "d")),
+            0x53: (self.bitbr(2, "e")),
+            0x54: (self.bitbr(2, "h")),
+            0x55: (self.bitbr(2, "l")),
+            0x56: (self.bitbhl(2)),
+            0x57: (self.bitbr(2, "a")),
+
+            0x58: (self.bitbr(3, "b")),
+            0x59: (self.bitbr(3, "c")),
+            0x5A: (self.bitbr(3, "d")),
+            0x5B: (self.bitbr(3, "e")),
+            0x5C: (self.bitbr(3, "h")),
+            0x5D: (self.bitbr(3, "l")),
+            0x5E: (self.bitbhl(3)),
+            0x5F: (self.bitbr(3, "a")),
+
+            0x60: (self.bitbr(4, "b")),
+            0x61: (self.bitbr(4, "c")),
+            0x62: (self.bitbr(4, "d")),
+            0x63: (self.bitbr(4, "e")),
+            0x64: (self.bitbr(4, "h")),
+            0x65: (self.bitbr(4, "l")),
+            0x66: (self.bitbhl(4)),
+            0x67: (self.bitbr(4, "a")),
+
+            0x68: (self.bitbr(5, "b")),
+            0x69: (self.bitbr(5, "c")),
+            0x6A: (self.bitbr(5, "d")),
+            0x6B: (self.bitbr(5, "e")),
+            0x6C: (self.bitbr(5, "h")),
+            0x6D: (self.bitbr(5, "l")),
+            0x6E: (self.bitbhl(5)),
+            0x6F: (self.bitbr(5, "a")),
+
+            0x70: (self.bitbr(6, "b")),
+            0x71: (self.bitbr(6, "c")),
+            0x72: (self.bitbr(6, "d")),
+            0x73: (self.bitbr(6, "e")),
+            0x74: (self.bitbr(6, "h")),
+            0x75: (self.bitbr(6, "l")),
+            0x76: (self.bitbhl(6)),
+            0x77: (self.bitbr(6, "a")),
+
+            0x78: (self.bitbr(7, "b")),
+            0x79: (self.bitbr(7, "c")),
+            0x7A: (self.bitbr(7, "d")),
+            0x7B: (self.bitbr(7, "e")),
+            0x7C: (self.bitbr(7, "h")),
+            0x7D: (self.bitbr(7, "l")),
+            0x7E: (self.bitbhl(7)),
+            0x7F: (self.bitbr(7, "a")),
+
+            0x80: (self.resbr(0, "b")),
+            0x81: (self.resbr(0, "c")),
+            0x82: (self.resbr(0, "d")),
+            0x83: (self.resbr(0, "e")),
+            0x84: (self.resbr(0, "h")),
+            0x85: (self.resbr(0, "l")),
+            0x86: (self.resbr(0, "l")),
+            0x87: (self.resbr(0, "a")),
+
+            0x88: (self.resbr(1, "b")),
+            0x89: (self.resbr(1, "c")),
+            0x8A: (self.resbr(1, "d")),
+            0x8B: (self.resbr(1, "e")),
+            0x8C: (self.resbr(1, "h")),
+            0x8D: (self.resbr(1, "l")),
+            0x8E: (self.resbr(1, "l")),
+            0x8F: (self.resbr(1, "a")),
+
+            0x90: (self.resbr(2, "b")),
+            0x91: (self.resbr(2, "c")),
+            0x92: (self.resbr(2, "d")),
+            0x93: (self.resbr(2, "e")),
+            0x94: (self.resbr(2, "h")),
+            0x95: (self.resbr(2, "l")),
+            0x96: (self.resbr(2, "l")),
+            0x97: (self.resbr(2, "a")),
+
+            0x98: (self.resbr(3, "b")),
+            0x99: (self.resbr(3, "c")),
+            0x9A: (self.resbr(3, "d")),
+            0x9B: (self.resbr(3, "e")),
+            0x9C: (self.resbr(3, "h")),
+            0x9D: (self.resbr(3, "l")),
+            0x9E: (self.resbr(3, "l")),
+            0x9F: (self.resbr(3, "a")),
+
+            0xA0: (self.resbr(4, "b")),
+            0xA1: (self.resbr(4, "c")),
+            0xA2: (self.resbr(4, "d")),
+            0xA3: (self.resbr(4, "e")),
+            0xA4: (self.resbr(4, "h")),
+            0xA5: (self.resbr(4, "l")),
+            0xA6: (self.resbr(4, "l")),
+            0xA7: (self.resbr(4, "a")),
+
+            0xA8: (self.resbr(5, "b")),
+            0xA9: (self.resbr(5, "c")),
+            0xAA: (self.resbr(5, "d")),
+            0xAB: (self.resbr(5, "e")),
+            0xAC: (self.resbr(5, "h")),
+            0xAD: (self.resbr(5, "l")),
+            0xAE: (self.resbr(5, "l")),
+            0xAF: (self.resbr(5, "a")),
+
+            0xB0: (self.resbr(6, "b")),
+            0xB1: (self.resbr(6, "c")),
+            0xB2: (self.resbr(6, "d")),
+            0xB3: (self.resbr(6, "e")),
+            0xB4: (self.resbr(6, "h")),
+            0xB5: (self.resbr(6, "l")),
+            0xB6: (self.resbr(6, "l")),
+            0xB7: (self.resbr(6, "a")),
+
+            0xB8: (self.resbr(7, "b")),
+            0xB9: (self.resbr(7, "c")),
+            0xBA: (self.resbr(7, "d")),
+            0xBB: (self.resbr(7, "e")),
+            0xBC: (self.resbr(7, "h")),
+            0xBD: (self.resbr(7, "l")),
+            0xBE: (self.resbr(7, "l")),
+            0xBF: (self.resbr(7, "a")),
+
+            0xC0: (self.setbr(0, "b")),
+            0xC1: (self.setbr(0, "c")),
+            0xC2: (self.setbr(0, "d")),
+            0xC3: (self.setbr(0, "e")),
+            0xC4: (self.setbr(0, "h")),
+            0xC5: (self.setbr(0, "l")),
+            0xC6: (self.setbr(0, "l")),
+            0xC7: (self.setbr(0, "a")),
+
+            0xC8: (self.setbr(1, "b")),
+            0xC9: (self.setbr(1, "c")),
+            0xCA: (self.setbr(1, "d")),
+            0xCB: (self.setbr(1, "e")),
+            0xCC: (self.setbr(1, "h")),
+            0xCD: (self.setbr(1, "l")),
+            0xCE: (self.setbr(1, "l")),
+            0xCF: (self.setbr(1, "a")),
+
+            0xD0: (self.setbr(2, "b")),
+            0xD1: (self.setbr(2, "c")),
+            0xD2: (self.setbr(2, "d")),
+            0xD3: (self.setbr(2, "e")),
+            0xD4: (self.setbr(2, "h")),
+            0xD5: (self.setbr(2, "l")),
+            0xD6: (self.setbr(2, "l")),
+            0xD7: (self.setbr(2, "a")),
+
+            0xD8: (self.setbr(3, "b")),
+            0xD9: (self.setbr(3, "c")),
+            0xDA: (self.setbr(3, "d")),
+            0xDB: (self.setbr(3, "e")),
+            0xDC: (self.setbr(3, "h")),
+            0xDD: (self.setbr(3, "l")),
+            0xDE: (self.setbr(3, "l")),
+            0xDF: (self.setbr(3, "a")),
+
+            0xE0: (self.setbr(4, "b")),
+            0xE1: (self.setbr(4, "c")),
+            0xE2: (self.setbr(4, "d")),
+            0xE3: (self.setbr(4, "e")),
+            0xE4: (self.setbr(4, "h")),
+            0xE5: (self.setbr(4, "l")),
+            0xE6: (self.setbr(4, "l")),
+            0xE7: (self.setbr(4, "a")),
+
+            0xE8: (self.setbr(5, "b")),
+            0xE9: (self.setbr(5, "c")),
+            0xEA: (self.setbr(5, "d")),
+            0xEB: (self.setbr(5, "e")),
+            0xEC: (self.setbr(5, "h")),
+            0xED: (self.setbr(5, "l")),
+            0xEE: (self.setbr(5, "l")),
+            0xEF: (self.setbr(5, "a")),
+
+            0xF0: (self.setbr(6, "b")),
+            0xF1: (self.setbr(6, "c")),
+            0xF2: (self.setbr(6, "d")),
+            0xF3: (self.setbr(6, "e")),
+            0xF4: (self.setbr(6, "h")),
+            0xF5: (self.setbr(6, "l")),
+            0xF6: (self.setbr(6, "l")),
+            0xF7: (self.setbr(6, "a")),
+
+            0xF8: (self.setbr(7, "b")),
+            0xF9: (self.setbr(7, "c")),
+            0xFA: (self.setbr(7, "d")),
+            0xFB: (self.setbr(7, "e")),
+            0xFC: (self.setbr(7, "h")),
+            0xFD: (self.setbr(7, "l")),
+            0xFE: (self.setbr(7, "l")),
+            0xFF: (self.setbr(7, "a"))
+
         }
 
-        function = lookup[self.r["pc"]]
+        function = lookup[self.memory.read(self.r["pc"])]
 
         function[0](*function[1])
 

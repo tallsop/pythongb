@@ -488,7 +488,7 @@ class MemoryController(object):
         # Execute the appropriate banking function
         banking_functions[self.banking_type](loc, data)
 
-    def readROM(self, rom):
+    def read_rom(self, rom):
         # Put the ROM into memory
         stream = open(rom, "rb")
 
