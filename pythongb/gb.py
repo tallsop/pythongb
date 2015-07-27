@@ -4,6 +4,8 @@ from gpu import GPU
 import OpenGL.GLUT as glut
 import OpenGL.GL as gl
 
+import time
+
 class GameBoy(object):
     def __init__(self):
         # Perform launch operations
@@ -41,6 +43,8 @@ class GameBoy(object):
         while self.running:
             # Firstly execute an instruction
             self.cpu.executeOpcode(self.cpu.memory.read(self.cpu.r["pc"]))
+
+            print("PC: " + str(hex(self.cpu.r["pc"])))
 
             # Increment the PC
             self.cpu.incPC()

@@ -76,19 +76,19 @@ class MemoryController(object):
 
     def read0(self, loc):
         # At the start of the emulation the bios is in use
-        if loc < 0x1000:
+        if loc <= 0x100:
             # At the start of the emulation the bios is in use
             if self.bios_use:
-                if (loc - 0x100) >= len(MemoryController.bios) - 1:
+                if loc == 0x100:
                     self.bios_use = False
 
-                return MemoryController.bios[loc - 0x100]
+                return MemoryController.bios[loc]
 
             return self.rom[loc]
         elif loc < 0x4000:
             return self.rom[loc]
         elif loc < 0x8000:
-            return self.rom[0x4000 + (loc - 0x4000)]
+            return self.rom[loc]
         elif loc < 0xA000:
             return self.vram[loc - 0x8000]
         elif loc < 0xC000:
@@ -99,8 +99,12 @@ class MemoryController(object):
             return self.wram[loc - 0xE000]
         elif loc < 0xFEA0:
             return self.oam[loc - 0xFE00]
+        elif loc < 0xFF00:
+            return 0x0
         elif loc < 0xFF4C:
             return self.io[loc - 0xFF00]
+        elif loc < 0xFF80:
+            return 0x0
         elif loc < 0xFFFF:
             return self.ram[loc - 0xFF80]
 
@@ -108,9 +112,9 @@ class MemoryController(object):
 
     # MBC1 Banking
     def read1(self, loc):
-        if loc < 0x1000:
+        if loc < 0x255:
             # At the start of the emulation the bios is in use
-            if self.bios_use:
+            if self.bios_use and loc < len(MemoryController.bios):
                 if (loc - 0x100) >= len(MemoryController.bios) - 1:
                     self.bios_use = False
 
@@ -176,7 +180,7 @@ class MemoryController(object):
         # At the start of the emulation the bios is in use
         if loc < 0x1000:
             # At the start of the emulation the bios is in use
-            if self.bios_use:
+            if self.bios_use and loc < len(MemoryController.bios):
                 if (loc - 0x100) >= len(MemoryController.bios) - 1:
                     self.bios_use = False
 
@@ -214,7 +218,7 @@ class MemoryController(object):
         # At the start of the emulation the bios is in use
         if loc < 0x1000:
             # At the start of the emulation the bios is in use
-            if self.bios_use:
+            if self.bios_use and loc < len(MemoryController.bios):
                 if (loc - 0x100) >= len(MemoryController.bios) - 1:
                     self.bios_use = False
 
@@ -243,7 +247,6 @@ class MemoryController(object):
         return 0
 
     def read(self, loc):
-        print("Reading " + str(hex(loc)))
         banking_functions = {
             0: self.read0,
             1: self.read1,
@@ -476,8 +479,6 @@ class MemoryController(object):
 
     def write(self, loc, data):
         # Map the bankingType to a dictionary function
-
-        print("Writing " + str(hex(data)) + " to " + str(hex(loc)))
         banking_functions = {
             0: self.write0,
             1: self.write1,

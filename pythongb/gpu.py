@@ -46,10 +46,10 @@ class GPU(object):
 
         # Palette to colour map
         self.palette_map = {
-            0: (255, 255, 255, 1),
-            1: (192, 192, 192, 1),
-            2: (96, 96, 96, 1),
-            3: (0, 0, 0, 1)
+            0: (255, 255, 255),
+            1: (192, 192, 192),
+            2: (96, 96, 96),
+            3: (0, 0, 0)
         }
 
     # Returns a tile line as an array of coloured pixels
@@ -79,12 +79,12 @@ class GPU(object):
         window = True if (self.memory.read(self.LCD_CONTROL) & 0b00100000) >> 5 == 1 else False
 
         if window:
-            tile_map_start = 0x8C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
+            map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
         else:
-            tile_map_start = None
+            map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b01000000) >> 6 == 1 else 0x9800
 
         # Decide which map to use
-        map_start = 0x8C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
+        tile_map_start = 0x8000 if (self.memory.read(self.LCD_CONTROL) & 0b00010000) >> 4 == 1 else 0x8800
 
         # Read the appropriate line
         y_start = self.line
@@ -105,23 +105,29 @@ class GPU(object):
 
         x = x_offset
 
-        # Read the line
+        lcd_offset = 0
+
         for i in xrange(160):
             loaded_tile = self.read_tile_line(tile, tile_map_start, self.line)
-            self.map[x, self.line] = loaded_tile[x]
+
+            self.map.putpixel((lcd_offset, self.line), loaded_tile[x])
 
             x += 1
 
+            lcd_offset += 1
+
             if x == 8:
                 x = 0
-                y_offset += 1
+                x_offset += 1
 
                 window = True if (self.memory.read(self.LCD_CONTROL) & 0b00100000) >> 5 == 1 else False
 
                 if window:
-                    tile_map_start = 0x8C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
+                    map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
                 else:
-                    tile_map_start = None
+                    map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b01000000) >> 6 == 1 else 0x9800
+
+                tile_map_start = 0x8000 if (self.memory.read(self.LCD_CONTROL) & 0b00010000) >> 4 == 1 else 0x8800
 
                 tile = self.memory.read(map_start + y_offset + x_offset)
 
@@ -130,7 +136,6 @@ class GPU(object):
                         tile -= 128
                     elif tile < 128:
                         tile += 128
-
 
     # This function syncs the GPU with the CPUs clock
     def sync(self, cycles):
@@ -156,20 +161,14 @@ class GPU(object):
                 # Write a line to the frame buffer
                 self.get_line()
 
+                self.memory.write(self.LCD_Y_LINE, self.line)
             self.clock = 0
 
         elif self.mode == 0:
             if self.clock >= 51:
                 self.clock = 0
 
-                # Draw a line!
-                self.get_line()
-
                 self.line += 1
-                # Write the current line to the register
-                self.memory.write(self.LCD_Y_LINE, self.line)
-
-
 
                 if self.line == 143:
                     # Perform a VBlank
