@@ -1,6 +1,7 @@
 # Reference: http://imrannazar.com/GameBoy-Emulation-in-JavaScript:-GPU-Timings
 from utils import *
 from PIL import Image
+from math import floor
 
 
 class GPU(object):
@@ -23,6 +24,18 @@ class GPU(object):
         # Create a 256 x 256 map for the bitmap
         self.map = Image.new("RGB", (160, 144), "white")
 
+        # Palette to colour map
+        self.palette_map = {
+            0: (255, 255, 255),
+            0: (255, 255, 255),
+            1: (192, 192, 192),
+            2: (96, 96, 96),
+            3: (0, 0, 0)
+        }
+
+        # A GPU internal set of tiles 128 + 255 tiles with y and x coords
+        self.tiles = [[[0 for x in range(8)] for y in range(8)] for i in range(128 + 255)]
+
         # GPU Register locations in memory
         self.LCD_CONTROL = 0xFF40
         self.LCD_STATUS = 0xFF41
@@ -44,13 +57,44 @@ class GPU(object):
 
         self.DMA_CONTROL = 0xFF46
 
-        # Palette to colour map
-        self.palette_map = {
-            0: (255, 255, 255, 1),
-            1: (192, 192, 192, 1),
-            2: (96, 96, 96, 1),
-            3: (0, 0, 0, 1)
-        }
+        self.build_tile_data()
+
+    # Creates the tile map from the set of tile held in the memory of the gameboy
+    def build_tile_data(self):
+        tiles_start = 0x8000
+        tiles_end = 0x9800
+        y = 0
+
+        tile = 0
+
+        for i in range(0, tiles_end - tiles_start, 2):
+            line1 = self.memory.read(tiles_start + i)
+            line2 = self.memory.read(tiles_start + i + 1)
+
+            for x in range(8):
+                self.tiles[tile][y][x] = (line1 >> 7 - x) & 0x1 | ((line2 >> 7 - x) & 0x1) << 1
+
+            y += 1
+
+            if y == 8:
+                y = 0
+                tile += 1
+
+    # This a function that is called that updates a particular tile when a write
+    # is issued to the VRAM in memory
+    def update_tile(self, write_location):
+        # Find the tile it belongs to in memory
+        tile_location = (floor(write_location / 16) * 16)
+
+        y = round((write_location - tile_location) / 2)
+        tile = tile_location - 0x8000
+
+        # Now update this whole line
+        line1 = self.memory.read(tile_location + (y * 2))
+        line2 = self.memory.read(tile_location + (y * 2) + 1)
+
+        for x in range(8):
+            self.tilestile][y][x] = (line1 >> 7 - x) & 0x1 | ((line2 >> 7 - x) & 0x1) << 1
 
     # Returns a tile line as an array of coloured pixels
     def read_tile_line(self, tile, map_start, y):
@@ -168,8 +212,6 @@ class GPU(object):
                 self.line += 1
                 # Write the current line to the register
                 self.memory.write(self.LCD_Y_LINE, self.line)
-
-
 
                 if self.line == 143:
                     # Perform a VBlank
