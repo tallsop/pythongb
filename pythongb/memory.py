@@ -87,8 +87,6 @@ class MemoryController(object):
                     self.bios_use = False
                     return self.rom[loc]
                 return MemoryController.bios[loc]
-
-                return MemoryController.bios[loc - 0x100]
             return self.rom[loc]
         if loc < 0x1000:
             return self.rom[loc]
