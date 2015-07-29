@@ -57,6 +57,10 @@ class MemoryController(object):
 
         self.latch_rtc = 0
 
+        # Tile outdated locations
+        self.tiles_outdated = False
+        self.outdated_location = 0x0
+
         # Time Registers
         self.seconds = 0
         self.minutes = 0
@@ -76,14 +80,15 @@ class MemoryController(object):
 
     def read0(self, loc):
         # At the start of the emulation the bios is in use
-        if loc < 0x1000:
-            # At the start of the emulation the bios is in use
+        if loc <= 0x100:
             if self.bios_use:
-                if (loc - 0x100) >= len(MemoryController.bios) - 1:
+                if loc == 0x100:
                     self.bios_use = False
+                    return self.rom[loc]
 
                 return MemoryController.bios[loc - 0x100]
-
+            return self.rom[loc]
+        if loc < 0x1000:
             return self.rom[loc]
         elif loc < 0x4000:
             return self.rom[loc]
@@ -243,7 +248,6 @@ class MemoryController(object):
         return 0
 
     def read(self, loc):
-        print("Reading " + str(hex(loc)))
         banking_functions = {
             0: self.read0,
             1: self.read1,
@@ -259,6 +263,11 @@ class MemoryController(object):
         # This is for selecting the appropriate bank
         if loc < 0x8000:
             self.rom[loc] = data
+        elif loc < 0x9800:
+            # Update the tile data
+            self.tiles_outdated = True
+            self.outdated_location = loc
+            return self.vram[loc - 0x8000]
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
         elif loc < 0xC000:
@@ -306,6 +315,12 @@ class MemoryController(object):
         elif 0x6000 <= loc < 0x8000:
             # Take the last bit and select the memory model
             self.memory_model = loc & 0x01
+
+        elif loc < 0x9800:
+            # Update the tile data
+            self.tiles_outdated = True
+            self.outdated_location = loc
+            return self.vram[loc - 0x8000]
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
         elif loc < 0xC000:
@@ -355,6 +370,11 @@ class MemoryController(object):
             # Take the last bit and select the memory model
             # self.memory_model = loc & 0x01
             pass
+        elif loc < 0x9800:
+            # Update the tile data
+            self.tiles_outdated = True
+            self.outdated_location = loc
+            return self.vram[loc - 0x8000]
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
         elif loc < 0xC000:
@@ -417,6 +437,12 @@ class MemoryController(object):
                 self.hours = date.hour
                 self.days = date.day
 
+        elif loc < 0x9800:
+            # Update the tile data
+            self.tiles_outdated = True
+            self.outdated_location = loc
+            return self.vram[loc - 0x8000]
+
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
         elif loc < 0xC000:
@@ -458,6 +484,13 @@ class MemoryController(object):
         elif 0x6000 <= loc < 0x8000:
             # Take the last bit and select the memory model
             self.memory_model = loc & 0x01
+
+        elif loc < 0x9800:
+            # Update the tile data
+            self.tiles_outdated = True
+            self.outdated_location = loc
+            return self.vram[loc - 0x8000]
+
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
         elif loc < 0xC000:

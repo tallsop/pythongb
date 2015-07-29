@@ -27,14 +27,13 @@ class GPU(object):
         # Palette to colour map
         self.palette_map = {
             0: (255, 255, 255),
-            0: (255, 255, 255),
             1: (192, 192, 192),
             2: (96, 96, 96),
             3: (0, 0, 0)
         }
 
         # A GPU internal set of tiles 128 + 255 tiles with y and x coords
-        self.tiles = [[[0 for x in range(8)] for y in range(8)] for i in range(128 + 255)]
+        self.tiles = [[[0 for x in range(8)] for y in range(8)] for i in range(128 + 255 + 1)]
 
         # GPU Register locations in memory
         self.LCD_CONTROL = 0xFF40
@@ -94,7 +93,7 @@ class GPU(object):
         line2 = self.memory.read(tile_location + (y * 2) + 1)
 
         for x in range(8):
-            self.tilestile][y][x] = (line1 >> 7 - x) & 0x1 | ((line2 >> 7 - x) & 0x1) << 1
+            self.tiles[tile][y][x] = (line1 >> 7 - x) & 0x1 | ((line2 >> 7 - x) & 0x1) << 1
 
     # Returns a tile line as an array of coloured pixels
     def read_tile_line(self, tile, map_start, y):
@@ -175,7 +174,6 @@ class GPU(object):
                     elif tile < 128:
                         tile += 128
 
-
     # This function syncs the GPU with the CPUs clock
     def sync(self, cycles):
         # Load the LCD Status Register
@@ -185,6 +183,9 @@ class GPU(object):
         # Read the status
         stat = self.memory.read(self.LCD_STATUS)
         self.mode = stat & 0x03
+
+        if self.memory.tiles_outdated:
+            self.update_tile(self.memory.outdated_location)
 
         if self.mode == 2:
             if self.clock >= 20:
