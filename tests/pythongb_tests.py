@@ -1,8 +1,8 @@
 from nose.tools import *
 from pythongb.cpu import *
+from pythongb.gb import *
 
 # The testing of the correctness of opcodes will be done using a test rom
-
 def test_cpu():
     gbcpu = CPU()
 
@@ -85,5 +85,7 @@ def test_cpu():
 
     for n in tests:
         gbcpu.cbtable_test(n)
+
+
 
 
