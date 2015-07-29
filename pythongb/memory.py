@@ -1,4 +1,5 @@
 from datetime import datetime
+
 """
 Memory Map
 ------------
@@ -519,6 +520,7 @@ class MemoryController(object):
             0: self.write0,
             1: self.write1,
             2: self.write2,
+            3: self.write3,
             5: self.write5
         }
 

@@ -1,5 +1,7 @@
-from memory import MemoryController
-from utils import *
+from .memory import MemoryController
+from .utils import *
+
+import time
 
 """
 Registers are defined as dictionaries as they are hashmaps, they allow for O(1) lookup.
@@ -27,17 +29,16 @@ class CPU(object):
             "f": 0,
             "h": 0,
             "l": 0,
-            "pc": 0x0,
-            "sp": 0xFFFE
+            "pc": 0,
+            "sp": 0
         }
 
-        # Initially the flag register is 0?
         self.flag = {
             "z": 0,
             "n": 0,
             "h": 0,
             "c": 0,
-            "ime": 1,
+            "ime": 0,
             "if": 0
         }
         self.memory = MemoryController(True)  # Set debug on
@@ -47,32 +48,23 @@ class CPU(object):
 
     """ Helper Functions """
     def getHL(self):
-        print("H part: " + str(hex(self.r["h"])))
-
-        print("L part: " + str(hex(self.r["l"])))
-        print("HL: " + str(hex(self.r["h"] << 8 | self.r["l"])))
-        return self.r["h"] << 8 | self.r["l"] & 0xFFFF
+        return (self.r["h"] << 8 | self.r["l"]) & 0xFFFF
 
     def getAB(self, a, b):
-        print("A part: " + str(hex(self.r[a])))
-
-        print("B part: " + str(hex(self.r[b])))
-        print("HL: " + str(hex(self.r["h"] << 8 | self.r["l"])))
         return (self.r[a] << 8 | self.r[b]) & 0xFFFF
 
     def incPC(self):
         self.r["pc"] += 1
+        self.r["pc"] &= 0xFFFF
 
     def addSP(self, value):
         self.r["sp"] += value
+        self.r["sp"] &= 0xFFFF
 
     def addAB(self, a, b, value):
         val = (self.r[a] << 8 | self.r[b]) + value
         self.r[a] = val >> 8
         self.r[b] = 0x00FF & val
-
-    def getFlagAsInt(self):
-        return self.flag["z"] << 8 | self.flag["n"] << 7 | self.flag["h"] << 6 | self.flag["c"] << 5
 
     """ Opcode functions are below """
 
@@ -189,7 +181,7 @@ class CPU(object):
         self.incPC()
         address = 0xFF00 + self.memory.read(self.r["pc"])
 
-        self.memory.write(address, self.r["a"])
+        self.r["a"] = self.memory.read(address)
 
     """ All 16 Bit Loads """
     # Place value n1n2 into ab
@@ -203,6 +195,15 @@ class CPU(object):
         self.r[a] = n2
         self.r[b] = n1
 
+    def ldimmediatesp(self):
+        # Load the next two values into the stack pointer
+        self.incPC()
+        low = self.memory.read(self.r["pc"])
+        self.incPC()
+        high = self.memory.read(self.r["pc"])
+
+        self.r["sp"] = high << 8 | low
+
     # Place HL into the SP
     def ldsphl(self):
         self.r["sp"] = self.getHL()
@@ -213,7 +214,7 @@ class CPU(object):
         n = self.memory.read(self.r["pc"])
 
         if n > 127:
-            n = ((n ^ 0xFF) + 1) & 0xFF
+            n = -(((n ^ 0xFF) + 1) & 0xFF)
 
         temp = self.r["sp"] + n
 
@@ -223,11 +224,15 @@ class CPU(object):
     # Put SP at address nn
     def ldnnsp(self):
         self.incPC()
-        self.memory.write(self.r["pc"], self.r["sp"] & 0xFF)
+        low = self.memory.read(self.r["pc"])
 
         self.incPC()
-        self.memory.write(self.r["pc"], (self.r["sp"] >> 8) & 0xFF)
+        high = self.memory.read(self.r["pc"])
 
+        address = high << 8 | low
+
+        self.memory.write(address, self.r["sp"] & 0xFF)
+        self.memory.write(address+1, self.r["sp"] >> 8)
 
     # Push register pair AB onto stack and decrement the SP twice
     def pushnn(self, a, b):
@@ -275,7 +280,7 @@ class CPU(object):
         self.r["a"] &= 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
@@ -292,7 +297,7 @@ class CPU(object):
         self.r["a"] &= 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
@@ -303,12 +308,13 @@ class CPU(object):
 
         self.r["a"] += self.r[n] + self.flag["c"]
 
+        self.flag["c"] = 1 if self.r["a"] > 0xFF else 0
+
         self.r["a"] &= 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
-        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
     # Add (HL) + carry to A
     def adcahl(self):
@@ -317,12 +323,14 @@ class CPU(object):
 
         self.r["a"] += value + self.flag["c"]
 
+        self.flag["c"] = 1 if self.r["a"] > 0xFF else 0
+
         self.r["a"] &= 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
-        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
+
 
     # Add the next memory address to A + carry bit
     def adcanext(self):
@@ -333,12 +341,13 @@ class CPU(object):
 
         self.r["a"] += value + self.flag["c"]
 
+        self.flag["c"] = 1 if self.r["a"] > 0xFF else 0
+
         self.r["a"] &= 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
-        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
     # Subtract register n from A
     def subn(self, n):
@@ -346,13 +355,14 @@ class CPU(object):
 
         self.r["a"] -= self.r[n]
 
+        self.flag["c"] = 1 if self.r["a"] > 0xFF else 0
+
         if self.r["a"] < 0:
             self.r["a"] = 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
-        self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
     # Subtract (HL) from A
     def subhl(self):
@@ -365,7 +375,7 @@ class CPU(object):
             self.r["a"] = 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
@@ -382,7 +392,7 @@ class CPU(object):
             self.r["a"] = 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
@@ -397,7 +407,7 @@ class CPU(object):
             self.r["a"] = 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
@@ -412,7 +422,7 @@ class CPU(object):
             self.r["a"] = 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
@@ -429,7 +439,7 @@ class CPU(object):
             self.r["a"] = 0xFF
 
         # Set the final flags
-        self.flag["z"] = 0 if self.r["a"] == 0 else 0
+        self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if self.r["a"] > 0xFFFF else 0
 
@@ -548,7 +558,7 @@ class CPU(object):
         discard = self.r["a"] - self.r[n]
 
         # Set the final flags
-        self.flag["z"] = 0 if discard == 0 else 0
+        self.flag["z"] = 1 if discard == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if discard > 0xFFFF else 0
 
@@ -560,7 +570,7 @@ class CPU(object):
         discard = self.r["a"] - value
 
         # Set the final flags
-        self.flag["z"] = 0 if discard == 0 else 0
+        self.flag["z"] = 1 if discard == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if discard > 0xFFFF else 0
 
@@ -573,8 +583,13 @@ class CPU(object):
 
         discard = self.r["a"] - value
 
+        print(discard)
+
+        if discard == -144:
+            time.sleep(1)
+
         # Set the final flags
-        self.flag["z"] = 0 if discard == 0 else 0
+        self.flag["z"] = 1 if discard == 0 else 0
         self.flag["n"] = 0
         self.flag["c"] = 1 if discard > 0xFFFF else 0
 
@@ -585,7 +600,7 @@ class CPU(object):
         self.r[n] &= 0xFF
 
         # Set the flags
-        self.flag["z"] = 1 if self.r[n] == 0 else 1
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 1 if self.r[n] & 0x10 else 0
 
@@ -597,7 +612,7 @@ class CPU(object):
             value = 0
 
         # Set the flags
-        self.flag["z"] = 1 if value == 0 else 1
+        self.flag["z"] = 1 if value == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 1 if value & 0x10 else 0
 
@@ -612,7 +627,7 @@ class CPU(object):
             self.r[n] = 255
 
         # Set the flags
-        self.flag["z"] = 1 if self.r[n] == 0 else 1
+        self.flag["z"] = 1 if self.r[n] == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 1 if self.r[n] & 0x10 else 0
 
@@ -621,7 +636,7 @@ class CPU(object):
         value = self.memory.read(self.getHL()) - 1
 
         # Set the flags
-        self.flag["z"] = 1 if value == 0 else 1
+        self.flag["z"] = 1 if value == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 1 if value & 0x10 else 0
 
@@ -1040,6 +1055,9 @@ class CPU(object):
         # Set the flags
         if bit == 0:
             self.flag["z"] = 1
+        else:
+            self.flag["z"] = 0
+
         self.flag["n"] = 0
         self.flag["h"] = 1
 
@@ -1047,13 +1065,13 @@ class CPU(object):
         # Get this bit
         bit_temp = self.memory.read(self.getHL())
 
-        print(str(hex(self.getHL())))
-
         bit = (bit_temp >> b) & 0x01
 
         # Set the flags
         if bit == 0:
             self.flag["z"] = 1
+        else:
+            self.flag["z"] = 0
 
         self.flag["n"] = 0
         self.flag["h"] = 1
@@ -1084,56 +1102,59 @@ class CPU(object):
         self.incPC()
         n2 = self.memory.read(self.r["pc"])
 
-        self.r["pc"] = (n2 << 8 | n1) - 1
+        self.r["pc"] = (n2 << 8 | n1)
 
     # Jump to address if Z flag is reset
     def jpnznn(self):
-        self.incPC()
-        n1 = self.memory.read(self.r["pc"])
-
-        self.incPC()
-        n2 = self.memory.read(self.r["pc"])
-
         if self.flag["z"] == 0:
-            self.r["pc"] = (n2 << 8 | n1) - 1
+            self.incPC()
+            n1 = self.memory.read(self.r["pc"])
+
+            self.incPC()
+            n2 = self.memory.read(self.r["pc"])
+            self.r["pc"] = (n2 << 8 | n1)
+        else:
+            self.r["pc"] += 2
 
     # Jump to address if Z flag is set
     def jpznn(self):
-        self.incPC()
-        n1 = self.memory.read(self.r["pc"])
-
-        self.incPC()
-        n2 = self.memory.read(self.r["pc"])
-
         if self.flag["z"] == 1:
-            self.r["pc"] = (n2 << 8 | n1) - 1
+            self.incPC()
+            n1 = self.memory.read(self.r["pc"])
+
+            self.incPC()
+            n2 = self.memory.read(self.r["pc"])
+            self.r["pc"] = (n2 << 8 | n1)
+        else:
+            self.r["pc"] += 2
 
     # Jump to address if C flag is reset
     def jpncnn(self):
-        self.incPC()
-        n1 = self.memory.read(self.r["pc"])
-
-        self.incPC()
-        n2 = self.memory.read(self.r["pc"])
-
         if self.flag["c"] == 0:
-            self.r["pc"] = (n2 << 8 | n1) - 1
+            self.incPC()
+            n1 = self.memory.read(self.r["pc"])
 
+            self.incPC()
+            n2 = self.memory.read(self.r["pc"])
+            self.r["pc"] = (n2 << 8 | n1)
+        else:
+            self.r["pc"] += 2
 
     # Jump to address if C flag is set
     def jpcnn(self):
-        self.incPC()
-        n1 = self.memory.read(self.r["pc"])
-
-        self.incPC()
-        n2 = self.memory.read(self.r["pc"])
-
         if self.flag["c"] == 1:
-            self.r["pc"] = (n2 << 8 | n1) - 1
+            self.incPC()
+            n1 = self.memory.read(self.r["pc"])
+
+            self.incPC()
+            n2 = self.memory.read(self.r["pc"])
+            self.r["pc"] = (n2 << 8 | n1)
+        else:
+            self.r["pc"] += 2
 
     # Jump to the address held in HL
     def jphl(self):
-        self.r["pc"] = self.getHL() - 1
+        self.r["pc"] = self.getHL()
 
     # Add n to current address and jump to it
     def jrn(self):
@@ -1142,33 +1163,46 @@ class CPU(object):
         self.incPC()
         n = self.memory.read(self.r["pc"])
 
-        self.r["pc"] = curr + n - 1
+        if n > 127:
+            n = -(((n ^ 0xFF) + 1) & 0xFF)
+
+        self.r["pc"] = curr + n
 
     # If Z is reset, jump to current address + n
     def jrnzn(self):
         self.incPC()
         if self.flag["z"] == 0:
             n = self.memory.read(self.r["pc"])
-            self.r["pc"] += n - 1
+
+            if n > 127:
+                n = -(((n ^ 0xFF) + 1) & 0xFF)
+
+            self.r["pc"] += n
 
     # If Z is set, jump to current address + n
     def jrzn(self):
         self.incPC()
         if self.flag["z"] == 1:
             n = self.memory.read(self.r["pc"])
-            self.r["pc"] += n - 1
+            if n > 127:
+                n = -(((n ^ 0xFF) + 1) & 0xFF)
+            self.r["pc"] += n
 
     def jrncn(self):
         self.incPC()
         if self.flag["c"] == 0:
             n = self.memory.read(self.r["pc"])
-            self.r["pc"] += n - 1
+            if n > 127:
+                n = -(((n ^ 0xFF) + 1) & 0xFF)
+            self.r["pc"] += n
 
     def jrcn(self):
         self.incPC()
         if self.flag["c"] == 1:
             n = self.memory.read(self.r["pc"])
-            self.r["pc"] += n - 1
+            if n > 127:
+                n = -(((n ^ 0xFF) + 1) & 0xFF)
+            self.r["pc"] += n
 
     """ Function Call Opcodes """
     # Push address of next instruction onto the stack then go to nn
@@ -1186,9 +1220,7 @@ class CPU(object):
         self.r["sp"] -= 1
         self.memory.write(self.r["sp"], self.r["pc"] & 0xFF)
 
-        self.r["pc"] = (high << 8 | low) - 1
-
-        print("Called address: " + str(hex(high << 8 | low)))
+        self.r["pc"] = (high << 8 | low)
 
     # Call the address nn if the Z flag is reset
     def callnznn(self):
@@ -1206,7 +1238,7 @@ class CPU(object):
             self.r["sp"] -= 1
             self.memory.write(self.r["sp"], self.r["pc"] & 0xFF)
 
-            self.r["pc"] = (high << 8 | low) - 1
+            self.r["pc"] = (high << 8 | low)
 
         else:
             self.incPC()
@@ -1228,7 +1260,7 @@ class CPU(object):
             self.r["sp"] -= 1
             self.memory.write(self.r["sp"], self.r["pc"] & 0xFF)
 
-            self.r["pc"] = (high << 8 | low) - 1
+            self.r["pc"] = (high << 8 | low)
 
         else:
             self.incPC()
@@ -1250,7 +1282,7 @@ class CPU(object):
             self.r["sp"] -= 1
             self.memory.write(self.r["sp"], self.r["pc"] & 0xFF)
 
-            self.r["pc"] = (high << 8 | low) - 1
+            self.r["pc"] = (high << 8 | low)
 
         else:
             self.incPC()
@@ -1272,8 +1304,7 @@ class CPU(object):
             self.r["sp"] -= 1
             self.memory.write(self.r["sp"], self.r["pc"] & 0xFF)
 
-            self.r["pc"] = (high << 8 | low) - 1
-
+            self.r["pc"] = (high << 8 | low)
         else:
             self.incPC()
             self.incPC()
@@ -1287,7 +1318,7 @@ class CPU(object):
         self.r["sp"] -= 1
         self.memory.write(self.r["sp"], self.r["pc"] & 0xFF)
 
-        self.r["pc"] = 0x0000 + n - 1
+        self.r["pc"] = 0x0000 + n
 
 
     """ Return Opcodes """
@@ -1298,7 +1329,7 @@ class CPU(object):
         high = self.memory.read(self.r["sp"])
         self.addSP(1)
 
-        self.r["pc"] = (high << 8 | low) - 1
+        self.r["pc"] = (high << 8 | low)
 
     # Return if the Z flag is reset
     def retnz(self):
@@ -1308,7 +1339,7 @@ class CPU(object):
             high = self.memory.read(self.r["sp"])
             self.addSP(1)
 
-            self.r["pc"] = (high << 8 | low) - 1
+            self.r["pc"] = (high << 8 | low)
 
     # Return if the Z flag is set
     def retz(self):
@@ -1318,7 +1349,7 @@ class CPU(object):
             high = self.memory.read(self.r["sp"])
             self.addSP(1)
 
-            self.r["pc"] = (high << 8 | low) - 1
+            self.r["pc"] = (high << 8 | low)
 
     # Return if the C flag is reset
     def retnc(self):
@@ -1328,7 +1359,7 @@ class CPU(object):
             high = self.memory.read(self.r["sp"])
             self.addSP(1)
 
-            self.r["pc"] = (high << 8 | low) - 1
+            self.r["pc"] = (high << 8 | low)
 
     # Return if the C flag is set
     def retc(self):
@@ -1338,7 +1369,7 @@ class CPU(object):
             high = self.memory.read(self.r["sp"])
             self.addSP(1)
 
-            self.r["pc"] = (high << 8 | low) - 1
+            self.r["pc"] = (high << 8 | low)
 
     # Pop two bytes off the stack and enable interrupts
     def reti(self):
@@ -1347,7 +1378,7 @@ class CPU(object):
         high = self.memory.read(self.r["sp"])
         self.addSP(1)
 
-        self.r["pc"] = (high << 8 | low) - 1
+        self.r["pc"] = (high << 8 | low)
 
         self.flag["ime"] = 1
 
@@ -1656,13 +1687,15 @@ class CPU(object):
 
         function = lookup[self.memory.read(self.r["pc"])]
 
+        print("Exec Opcode: " + function[0].__name__)
+        print("Params: " + str(function[1]))
+
         function[0](*function[1])
 
         self.clock += function[2]  # Add the cycles to the clock
         self.last_clock_inc = function[2]
 
     def cbtable_test(self, opcode):
-        print("Executing: " + str(hex(opcode)))
         lookup = {
             # SWAP n
             0x37: (self.swapn, ["a"], 8),
@@ -1858,7 +1891,7 @@ class CPU(object):
             0x22: (self.ldihla, [], 8),
 
             # LDH (n), A
-            0xE0: (self.ldhan, [], 12),
+            0xE0: (self.ldhna, [], 12),
 
             # LDH A, (n)
             0xF0: (self.ldhan, [], 12),
@@ -1867,7 +1900,7 @@ class CPU(object):
             0x01: (self.ldnnn16, ["b", "c"], 12),
             0x11: (self.ldnnn16, ["d", "e"], 12),
             0x21: (self.ldnnn16, ["h", "l"], 12),
-            0x31: (self.ldnnsp, [], 12),
+            0x31: (self.ldimmediatesp, [], 12),
 
             # LD SP, HL
             0xF9: (self.ldsphl, [], 8),
@@ -2115,10 +2148,15 @@ class CPU(object):
             0xD9: (self.reti, [], 8)
         }
 
-        print("Executing: " + str(hex(opcode)))
-
         function = map[opcode]
+
+        print("Exec Opcode: " + function[0].__name__)
+        print("Params: " + str(function[1]))
+
         function[0](*function[1])
+
+        #print("SP:" + str(hex(self.r["sp"])))
+       # print("HL:" + str(hex(self.r["h"] << 8 | self.r["l"])))
 
         self.clock += function[2]  # Add the cycles to the clock
         self.last_clock_inc = function[2]

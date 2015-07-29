@@ -1,5 +1,5 @@
-from cpu import CPU
-from gpu import GPU
+from .gpu import GPU
+from .cpu import CPU
 
 import OpenGL.GLUT as glut
 import OpenGL.GL as gl
@@ -41,13 +41,13 @@ class GameBoy(object):
         self.cpu.memory.read_rom(rom_path)
 
         while self.running:
+            # Increment the PC
+            print("Exec PC: " + str(hex(self.cpu.r["pc"])))
+
             # Firstly execute an instruction
             self.cpu.executeOpcode(self.cpu.memory.read(self.cpu.r["pc"]))
 
-            print("PC: " + str(hex(self.cpu.r["pc"])))
-
-            # Increment the PC
-            self.cpu.incPC()
-
             # Sync the GPU with the CPU
-            self.gpu.sync(self.cpu.last_clock_inc)
+            #self.gpu.sync(self.cpu.last_clock_inc)
+
+            self.cpu.incPC()

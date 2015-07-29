@@ -1,6 +1,5 @@
 # Reference: http://imrannazar.com/GameBoy-Emulation-in-JavaScript:-GPU-Timings
-from utils import *
-from PIL import Image
+from .utils import *
 from math import floor
 
 
@@ -22,7 +21,7 @@ class GPU(object):
         self.line = 0
 
         # Create a 256 x 256 map for the bitmap
-        self.map = Image.new("RGB", (160, 144), "white")
+        #self.map = Image.new("RGB", (160, 144), "white")
 
         # Palette to colour map
         self.palette_map = {
@@ -83,14 +82,14 @@ class GPU(object):
     # is issued to the VRAM in memory
     def update_tile(self, write_location):
         # Find the tile it belongs to in memory
-        tile_location = (floor(write_location / 16) * 16)
+        tile_location = int(floor(write_location / 16) * 16)
 
-        y = round((write_location - tile_location) / 2)
+        y = int(round((write_location - tile_location) / 2))
         tile = tile_location - 0x8000
 
         # Now update this whole line
-        line1 = self.memory.read(tile_location + (y * 2))
-        line2 = self.memory.read(tile_location + (y * 2) + 1)
+        line1 = self.memory.read(tile_location + y * 2)
+        line2 = self.memory.read(tile_location + y * 2 + 1)
 
         for x in range(8):
             self.tiles[tile][y][x] = (line1 >> 7 - x) & 0x1 | ((line2 >> 7 - x) & 0x1) << 1
