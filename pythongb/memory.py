@@ -81,23 +81,16 @@ class MemoryController(object):
     def read0(self, loc):
         # At the start of the emulation the bios is in use
         if loc <= 0x100:
-<<<<<<< HEAD
             # At the start of the emulation the bios is in use
-=======
->>>>>>> 96d835938b3e3fb5543586f1d357e41676de5f7e
             if self.bios_use:
                 if loc == 0x100:
                     self.bios_use = False
                     return self.rom[loc]
-
-<<<<<<< HEAD
                 return MemoryController.bios[loc]
 
-=======
                 return MemoryController.bios[loc - 0x100]
             return self.rom[loc]
         if loc < 0x1000:
->>>>>>> 96d835938b3e3fb5543586f1d357e41676de5f7e
             return self.rom[loc]
         elif loc < 0x4000:
             return self.rom[loc]
