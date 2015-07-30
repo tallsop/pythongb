@@ -5,6 +5,6 @@ if __name__ == "__main__":
     # Initialise a gameboy
     rom = sys.argv[0]
 
-    gb = GameBoy()
+    gb = GameBoy(False)
 
     gb.run("tetris.gb")

@@ -7,14 +7,16 @@ import OpenGL.GL as gl
 import time
 
 class GameBoy(object):
-    def __init__(self):
+    def __init__(self, debug):
         # Perform launch operations
 
         # Initialise the CPU
-        self.cpu = CPU()
+        self.cpu = CPU(debug)
         self.gpu = GPU(self.cpu.memory)
 
         self.running = True
+
+        self.debug = debug
 
     def keyboard(self, key, x, y):
         pass
@@ -42,12 +44,13 @@ class GameBoy(object):
 
         while self.running:
             # Increment the PC
-            print("Exec PC: " + str(hex(self.cpu.r["pc"])))
+            if self.debug:
+                print("Exec PC: " + str(hex(self.cpu.r["pc"])))
 
             # Firstly execute an instruction
             self.cpu.executeOpcode(self.cpu.memory.read(self.cpu.r["pc"]))
 
             # Sync the GPU with the CPU
-            #self.gpu.sync(self.cpu.last_clock_inc)
+            self.gpu.sync(self.cpu.last_clock_inc)
 
             self.cpu.incPC()

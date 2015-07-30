@@ -16,6 +16,7 @@ class GPU(object):
         # 2 - Scanline (Accessing OAM) (20 Clocks)
         # 3 - Scanline (Accessing VRAM) (43 Clocks)
         self.mode = 0
+        self.interrupt_type = 0
 
         # Holds the current line that would be drawn to
         self.line = 0
@@ -94,150 +95,97 @@ class GPU(object):
         for x in range(8):
             self.tiles[tile][y][x] = (line1 >> 7 - x) & 0x1 | ((line2 >> 7 - x) & 0x1) << 1
 
-    # Returns a tile line as an array of coloured pixels
-    def read_tile_line(self, tile, map_start, y):
-        tile_start = tile * 16
-        y_start = y * 2
-
-        top = self.memory.read(map_start + tile_start + y_start)
-        bottom = self.memory.read(map_start + tile_start + y_start + 1)
-
-        tile = []
-
-        for i in range(8):
-            mask = 0b10000000 >> i
-            pixel = ((bottom & mask) >> 7 - i) << 1 | (top & mask) >> 7 - i
-
-            tile.append(self.palette_map[pixel])
-
-        return tile
-
-    def get_line(self):
-        # Define the palette map
-        pal = self.memory.read(self.PALETTE)
-        palette = (pal & 0b11, (pal & 0b1100) >> 2, (pal & 0b110000) >> 4, (pal & 0b11000000) >> 6)
-
-        # First decide if the window is being used or not
-        window = True if (self.memory.read(self.LCD_CONTROL) & 0b00100000) >> 5 == 1 else False
-
-        if window:
-            map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
-        else:
-            map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b01000000) >> 6 == 1 else 0x9800
-
-        # Decide which map to use
-        tile_map_start = 0x8000 if (self.memory.read(self.LCD_CONTROL) & 0b00010000) >> 4 == 1 else 0x8800
-
-        # Read the appropriate line
-        y_start = self.line
-
-        # Also need to adjust to the LCD x and y shift
-        y_offset = ((y_start + self.memory.read(self.SCROLL_Y)) >> 3) << 5
-        x_offset = self.memory.read(self.SCROLL_X) >> 3
-
-        # Now read a tile
-        tile = self.memory.read(map_start + y_offset + x_offset)
-
-        # Since the window tiles are -128 - 128 map to 0 - 255
-        if window:
-            if tile >= 128:
-                tile -= 128
-            elif tile < 128:
-                tile += 128
-
-        x = x_offset
-
-        lcd_offset = 0
-
-        for i in xrange(160):
-            loaded_tile = self.read_tile_line(tile, tile_map_start, self.line)
-
-            self.map.putpixel((lcd_offset, self.line), loaded_tile[x])
-
-            x += 1
-
-            lcd_offset += 1
-
-            if x == 8:
-                x = 0
-                x_offset += 1
-
-                window = True if (self.memory.read(self.LCD_CONTROL) & 0b00100000) >> 5 == 1 else False
-
-                if window:
-                    map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b00001000) >> 3 == 1 else 0x9800
-                else:
-                    map_start = 0x9C00 if (self.memory.read(self.LCD_CONTROL) & 0b01000000) >> 6 == 1 else 0x9800
-
-                tile_map_start = 0x8000 if (self.memory.read(self.LCD_CONTROL) & 0b00010000) >> 4 == 1 else 0x8800
-
-                tile = self.memory.read(map_start + y_offset + x_offset)
-
-                if window:
-                    if tile >= 128:
-                        tile -= 128
-                    elif tile < 128:
-                        tile += 128
-
     # This function syncs the GPU with the CPUs clock
     def sync(self, cycles):
-        # Load the LCD Status Register
-
         self.clock += cycles
 
-        # Read the status
-        stat = self.memory.read(self.LCD_STATUS)
-        self.mode = stat & 0x03
-
+        self.line = self.memory.read(self.LCD_Y_LINE)
         if self.memory.tiles_outdated:
-            self.update_tile(self.memory.outdated_location)
+            #self.update_tile(self.memory.outdated_location)
+            pass
 
+        # OAM Access
         if self.mode == 2:
             if self.clock >= 20:
-                # Move to VRAM access mode
+                # Move to OAM access mode
                 self.mode = 3
+
+                # Write that it is switching to a OAM interrupt
+                self.interrupt_type &= 0b11000000
+
+                self.interrupt_type |= 0b00100000
+                self.interrupt_type |= self.mode
+
+                self.memory.write(self.LCD_STATUS, self.interrupt_type)
 
                 self.clock = 0
 
+        # VRAM Mode
         elif self.mode == 3:
             if self.clock >= 43:
                 self.mode = 0
 
                 # Write a line to the frame buffer
-                self.get_line()
+                self.clock = 0
 
-                self.memory.write(self.LCD_Y_LINE, self.line)
-            self.clock = 0
+                # Write that it is switching to a H-blank interrupt
+                self.interrupt_type &= 0b11000000
 
+                self.interrupt_type |= 0b00001000
+                self.interrupt_type |= self.mode
+
+                self.memory.write(self.LCD_STATUS, self.interrupt_type)
+
+        # H-Blank
         elif self.mode == 0:
             if self.clock >= 51:
                 self.clock = 0
 
                 self.line += 1
 
+                self.memory.write(self.LCD_Y_LINE, self.line)
+
                 if self.line == 143:
                     # Perform a VBlank
-                    self.mode = 0
-                    self.line = 0
+                    self.mode = 1
+
+                    # Write that it is switching to a v-blank interrupt
+                    self.interrupt_type &= 0b11000000
+
+                    self.interrupt_type |= 0b00010000
+                    self.interrupt_type |= self.mode
 
                     # Push the image to be rendered
                     # For testing purposes, just place it in a PIL container
-                    map.show()
+                    # map.show()
                 else:
                     # Move to VRAM access
                     self.mode = 2
 
+                    self.interrupt_type &= 0b11000000
+
+                    self.interrupt_type |= 0b00010000
+                    self.interrupt_type |= self.mode
+
+                    self.memory.write(self.LCD_STATUS, self.interrupt_type)
+
+        # V-Blank
         else:
             if self.clock >= 114:
                 self.clock = 0
 
                 self.line += 1
 
-                if self.line == 10:
+                self.memory.write(self.LCD_Y_LINE, 144)
+
+                if self.line > 153:
                     self.line = 0
                     self.mode = 2
 
-        # Write the status into memory
-        self.memory.write(self.LCD_STATUS, (stat & 0xb11111100) | self.mode)
+                    self.interrupt_type &= 0b11000000
 
+                    self.interrupt_type |= 0b00010000
+                    self.interrupt_type |= self.mode
 
+                    self.memory.write(self.LCD_STATUS, self.interrupt_type)
+                    self.memory.write(self.LCD_Y_LINE, self.line)

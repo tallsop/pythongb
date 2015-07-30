@@ -18,7 +18,7 @@ C - Carry flag - 3
 
 
 class CPU(object):
-    def __init__(self):
+    def __init__(self, debug):
         # All values are set to their initial values upon the systems startup
         self.r = {
             "a": 0,
@@ -43,6 +43,7 @@ class CPU(object):
         }
         self.memory = MemoryController(True)  # Set debug on
 
+        self.debug = debug
         self.clock = 0
         self.last_clock_inc = 0
 
@@ -355,10 +356,9 @@ class CPU(object):
 
         self.r["a"] -= self.r[n]
 
-        self.flag["c"] = 1 if self.r["a"] > 0xFF else 0
+        self.r["a"] &= 0xFF
 
-        if self.r["a"] < 0:
-            self.r["a"] = 0xFF
+        self.flag["c"] = 1 if self.r["a"] > 0xFF else 0
 
         # Set the final flags
         self.flag["z"] = 1 if self.r["a"] == 0 else 0
@@ -371,8 +371,7 @@ class CPU(object):
 
         self.r["a"] -= value
 
-        if self.r["a"] < 0:
-            self.r["a"] = 0xFF
+        self.r["a"] &= 0xFF
 
         # Set the final flags
         self.flag["z"] = 1 if self.r["a"] == 0 else 0
@@ -388,8 +387,7 @@ class CPU(object):
 
         self.r["a"] -= value
 
-        if self.r["a"] < 0:
-            self.r["a"] = 0xFF
+        self.r["a"] &= 0xFF
 
         # Set the final flags
         self.flag["z"] = 1 if self.r["a"] == 0 else 0
@@ -403,8 +401,7 @@ class CPU(object):
 
         self.r["a"] -= (self.r[n] + self.flag["c"])
 
-        if self.r["a"] < 0:
-            self.r["a"] = 0xFF
+        self.r["a"] &= 0xFF
 
         # Set the final flags
         self.flag["z"] = 1 if self.r["a"] == 0 else 0
@@ -417,9 +414,7 @@ class CPU(object):
         self.flag["h"] = 1 if (self.r["a"] & 0x0F - (value & 0x0F + self.flag["c"])) & 0x10 else 0
 
         self.r["a"] -= (value + self.flag["c"])
-
-        if self.r["a"] < 0:
-            self.r["a"] = 0xFF
+        self.r["a"] &= 0xFF
 
         # Set the final flags
         self.flag["z"] = 1 if self.r["a"] == 0 else 0
@@ -435,9 +430,7 @@ class CPU(object):
 
         self.r["a"] -= (value + self.flag["c"])
 
-        if self.r["a"] < 0:
-            self.r["a"] = 0xFF
-
+        self.r["a"] &= 0xFF
         # Set the final flags
         self.flag["z"] = 1 if self.r["a"] == 0 else 0
         self.flag["n"] = 0
@@ -583,11 +576,6 @@ class CPU(object):
 
         discard = self.r["a"] - value
 
-        print(discard)
-
-        if discard == -144:
-            time.sleep(1)
-
         # Set the final flags
         self.flag["z"] = 1 if discard == 0 else 0
         self.flag["n"] = 0
@@ -623,13 +611,12 @@ class CPU(object):
     def decn(self, n):
         self.r[n] -= 1
 
-        if self.r[n] < 0:
-            self.r[n] = 255
-
         # Set the flags
         self.flag["z"] = 1 if self.r[n] == 0 else 0
         self.flag["n"] = 0
         self.flag["h"] = 1 if self.r[n] & 0x10 else 0
+
+        self.r[n] &= 0xFF
 
     # Decrement address value (HL)
     def dechl(self):
@@ -1158,19 +1145,18 @@ class CPU(object):
 
     # Add n to current address and jump to it
     def jrn(self):
-        curr = self.r["pc"]
-
         self.incPC()
         n = self.memory.read(self.r["pc"])
 
         if n > 127:
             n = -(((n ^ 0xFF) + 1) & 0xFF)
 
-        self.r["pc"] = curr + n
+        self.r["pc"] += n
 
     # If Z is reset, jump to current address + n
     def jrnzn(self):
         self.incPC()
+
         if self.flag["z"] == 0:
             n = self.memory.read(self.r["pc"])
 
@@ -1186,6 +1172,7 @@ class CPU(object):
             n = self.memory.read(self.r["pc"])
             if n > 127:
                 n = -(((n ^ 0xFF) + 1) & 0xFF)
+
             self.r["pc"] += n
 
     def jrncn(self):
@@ -1687,8 +1674,9 @@ class CPU(object):
 
         function = lookup[self.memory.read(self.r["pc"])]
 
-        print("Exec Opcode: " + function[0].__name__)
-        print("Params: " + str(function[1]))
+        if self.debug:
+            print("Exec Opcode: " + function[0].__name__)
+            print("Params: " + str(function[1]))
 
         function[0](*function[1])
 
@@ -2149,9 +2137,9 @@ class CPU(object):
         }
 
         function = map[opcode]
-
-        print("Exec Opcode: " + function[0].__name__)
-        print("Params: " + str(function[1]))
+        if self.debug:
+            print("Exec Opcode: " + function[0].__name__)
+            print("Params: " + str(function[1]))
 
         function[0](*function[1])
 
