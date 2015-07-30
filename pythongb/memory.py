@@ -58,10 +58,6 @@ class MemoryController(object):
 
         self.latch_rtc = 0
 
-        # Tile outdated locations
-        self.tiles_outdated = False
-        self.outdated_location = 0x0
-
         # Time Registers
         self.seconds = 0
         self.minutes = 0
@@ -78,6 +74,9 @@ class MemoryController(object):
         self.io = bytearray(0xFF4C - 0xFF00)  # 0xFF00- 0xFF4C
         # 0xFF4C - 0xFF80 is empty
         self.ram = bytearray(0xFFFF - 0xFF80)  # 0xFF80 - 0xFFFF
+
+        # GPU Reference (Empty until attached)
+        self.gpu = None
 
     def read0(self, loc):
         # At the start of the emulation the bios is in use
@@ -272,8 +271,7 @@ class MemoryController(object):
             self.rom[loc] = data
         elif loc < 0x9800:
             # Update the tile data
-            self.tiles_outdated = True
-            self.outdated_location = loc
+            self.gpu.update_tiles(loc)
             return self.vram[loc - 0x8000]
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
@@ -560,3 +558,6 @@ class MemoryController(object):
 
         # Place this in memory
         self.rom = rom_array
+
+    def attach_gpu(self, gpu):
+        self.gpu = gpu

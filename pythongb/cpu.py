@@ -41,11 +41,12 @@ class CPU(object):
             "ime": 0,
             "if": 0
         }
-        self.memory = MemoryController(True)  # Set debug on
 
         self.debug = debug
         self.clock = 0
         self.last_clock_inc = 0
+
+        self.memory = MemoryController(debug)
 
     """ Helper Functions """
     def getHL(self):

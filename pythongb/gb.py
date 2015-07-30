@@ -1,5 +1,6 @@
 from .gpu import GPU
 from .cpu import CPU
+from .memory import MemoryController
 
 import OpenGL.GLUT as glut
 import OpenGL.GL as gl
@@ -9,10 +10,10 @@ import time
 class GameBoy(object):
     def __init__(self, debug):
         # Perform launch operations
-
-        # Initialise the CPU
         self.cpu = CPU(debug)
         self.gpu = GPU(self.cpu.memory)
+
+        self.cpu.memory.attach_gpu(self.gpu)
 
         self.running = True
 

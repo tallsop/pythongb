@@ -56,9 +56,8 @@ class GPU(object):
 
         self.DMA_CONTROL = 0xFF46
 
-        self.build_tile_data()
-
     # Creates the tile map from the set of tile held in the memory of the gameboy
+    # This may not be necessary.
     def build_tile_data(self):
         tiles_start = 0x8000
         tiles_end = 0x9800
@@ -81,28 +80,48 @@ class GPU(object):
 
     # This a function that is called that updates a particular tile when a write
     # is issued to the VRAM in memory
-    def update_tile(self, write_location):
+    def update_tiles(self, write_location):
         # Find the tile it belongs to in memory
         tile_location = int(floor(write_location / 16) * 16)
 
         y = int(round((write_location - tile_location) / 2))
-        tile = tile_location - 0x8000
+        tile = (tile_location - 0x8000) / 16
 
         # Now update this whole line
         line1 = self.memory.read(tile_location + y * 2)
-        line2 = self.memory.read(tile_location + y * 2 + 1)
+        line2 = self.memory.read(tile_location + (y * 2) + 1)
 
         for x in range(8):
             self.tiles[tile][y][x] = (line1 >> 7 - x) & 0x1 | ((line2 >> 7 - x) & 0x1) << 1
+
+    def draw_line(self):
+        # Read the LCD control register
+        lcd_control = self.memory.read(self.LCD_CONTROL)
+
+        # Decide if we are rendering the window or not
+        window = True if (lcd_control & 0b00100000) >> 5 == 1 else False
+
+        # Decide which screen map to draw from first
+        if window:
+            tile_screen_map = 0x9C00 if (lcd_control >> 6) & 0x1 else 0x9800
+        else:
+            tile_screen_map = 0x9C00 if (lcd_control >> 3) & 0x1 else 0x9800
+
+        # Decide which tile map to draw from
+        tile_vram_map = 0x8000 if (lcd_control >> 4) & 0x1 else 0x8800
+
+        y_offset = self.memory.read()
+
+        # Construct the palette for rendering
+        pal = self.memory.read(self.PALETTE)
+        palette = (pal & 0b11, (pal & 0b1100) >> 2, (pal & 0b110000) >> 4, (pal & 0b11000000) >> 6)
+
 
     # This function syncs the GPU with the CPUs clock
     def sync(self, cycles):
         self.clock += cycles
 
         self.line = self.memory.read(self.LCD_Y_LINE)
-        if self.memory.tiles_outdated:
-            #self.update_tile(self.memory.outdated_location)
-            pass
 
         # OAM Access
         if self.mode == 2:
