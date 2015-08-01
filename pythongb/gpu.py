@@ -2,6 +2,8 @@
 from .utils import *
 from math import floor
 
+from PIL import Image
+
 
 class GPU(object):
     def __init__(self, mem_controller):
@@ -22,7 +24,8 @@ class GPU(object):
         self.line = 0
 
         # Create a 256 x 256 map for the bitmap
-        #self.map = Image.new("RGB", (160, 144), "white")
+        self.map = Image.new("RGB", (160, 144), "black")
+        self.img = self.map.load()
 
         # Palette to colour map
         self.palette_map = {
@@ -90,7 +93,6 @@ class GPU(object):
         # Now update this whole line
         line1 = self.memory.read(tile_location + y * 2)
         line2 = self.memory.read(tile_location + (y * 2) + 1)
-
         for x in range(8):
             self.tiles[tile][y][x] = (line1 >> 7 - x) & 0x1 | ((line2 >> 7 - x) & 0x1) << 1
 
@@ -110,18 +112,52 @@ class GPU(object):
         # Decide which tile map to draw from
         tile_vram_map = 0x8000 if (lcd_control >> 4) & 0x1 else 0x8800
 
-        y_offset = self.memory.read()
+        actual_y = self.line + self.memory.read(self.SCROLL_Y)
+        actual_x = self.memory.read(self.SCROLL_X)
 
-        # Construct the palette for rendering
+        tile_y = int(floor(actual_y / 8))
+        tile_x = int(floor(actual_x / 8))
+
+        y_tile_offset = actual_y & 7
+        x_tile_offset = actual_x & 7
+
+        tile = self.memory.read(tile_screen_map + tile_y + tile_x)
+
+        # Map the tile appropriately, if it is negative
+        if tile_vram_map == 0x8800:
+            if tile > 127:
+                tile = -(((tile ^ 0xFF) + 1) & 0xFF)
+
+            tile += 128
+
+        # Load the palette
         pal = self.memory.read(self.PALETTE)
         palette = (pal & 0b11, (pal & 0b1100) >> 2, (pal & 0b110000) >> 4, (pal & 0b11000000) >> 6)
 
+        for i in range(160):
+            # Now place the tile into the image
+            tile_value = self.tiles[tile][y_tile_offset][x_tile_offset]
+
+            self.img[i, self.line] = self.palette_map[palette[tile_value]]
+
+            x_tile_offset += 1
+
+            if x_tile_offset == 8:
+                x_tile_offset = 0
+
+                tile_x += 1
+
+                tile = self.memory.read(tile_screen_map + tile_y + tile_x)
+
+                if tile_vram_map == 0x8800:
+                    if tile > 127:
+                        tile = -(((tile ^ 0xFF) + 1) & 0xFF)
+
+                    tile += 128
 
     # This function syncs the GPU with the CPUs clock
     def sync(self, cycles):
         self.clock += cycles
-
-        self.line = self.memory.read(self.LCD_Y_LINE)
 
         # OAM Access
         if self.mode == 2:
@@ -154,6 +190,7 @@ class GPU(object):
                 self.interrupt_type |= self.mode
 
                 self.memory.write(self.LCD_STATUS, self.interrupt_type)
+                self.draw_line()
 
         # H-Blank
         elif self.mode == 0:
@@ -176,7 +213,8 @@ class GPU(object):
 
                     # Push the image to be rendered
                     # For testing purposes, just place it in a PIL container
-                    # map.show()
+                    self.memory.write(self.LCD_Y_LINE, 144)
+
                 else:
                     # Move to VRAM access
                     self.mode = 2
@@ -194,8 +232,6 @@ class GPU(object):
                 self.clock = 0
 
                 self.line += 1
-
-                self.memory.write(self.LCD_Y_LINE, 144)
 
                 if self.line > 153:
                     self.line = 0
