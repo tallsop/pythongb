@@ -577,6 +577,8 @@ class CPU(object):
 
         discard = self.r["a"] - value
 
+        print("Discard: " + str(discard))
+
         # Set the final flags
         self.flag["z"] = 1 if discard == 0 else 0
         self.flag["n"] = 0

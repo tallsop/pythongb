@@ -272,7 +272,7 @@ class MemoryController(object):
         elif loc < 0x9800:
             # Update the tile data
             self.gpu.update_tiles(loc)
-            return self.vram[loc - 0x8000]
+            self.vram[loc - 0x8000] = data
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
         elif loc < 0xC000:
@@ -323,8 +323,6 @@ class MemoryController(object):
 
         elif loc < 0x9800:
             # Update the tile data
-            self.tiles_outdated = True
-            self.outdated_location = loc
             return self.vram[loc - 0x8000]
         elif loc < 0xA000:
             self.vram[loc - 0x8000] = data
