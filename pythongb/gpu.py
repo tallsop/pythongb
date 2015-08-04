@@ -2,7 +2,7 @@
 from .utils import *
 from math import floor
 
-from PIL import Image
+import numpy as np
 
 
 class GPU(object):
@@ -23,9 +23,8 @@ class GPU(object):
         # Holds the current line that would be drawn to
         self.line = 0
 
-        # Create a 256 x 256 map for the bitmap
-        self.map = Image.new("RGB", (160, 144), "black")
-        self.img = self.map.load()
+        # Create a 160x144 map for the bitmap
+        self.map = np.zeros((160, 144, 3), np.float32)
 
         # Palette to colour map
         self.palette_map = {
@@ -37,6 +36,8 @@ class GPU(object):
 
         # A GPU internal set of tiles 128 + 255 tiles with y and x coords
         self.tiles = [[[0 for x in range(8)] for y in range(8)] for i in range(128 + 255 + 1)]
+
+        self.image_ready = False
 
         # GPU Register locations in memory
         self.LCD_CONTROL = 0xFF40
@@ -138,7 +139,11 @@ class GPU(object):
             # Now place the tile into the image
             tile_value = self.tiles[tile][y_tile_offset][x_tile_offset]
 
-            self.img[i, self.line] = self.palette_map[palette[tile_value]]
+            final = self.palette_map[palette[tile_value]]
+
+            self.map[i, self.line, 0] = final[0] / 255.0
+            self.map[i, self.line, 1] = final[1] / 255.0
+            self.map[i, self.line, 2] = final[2] / 255.0
 
             x_tile_offset += 1
 
@@ -154,6 +159,13 @@ class GPU(object):
                         tile = -(((tile ^ 0xFF) + 1) & 0xFF)
 
                     tile += 128
+
+    def get_frame(self):
+        if self.image_ready:
+            self.image_ready = False
+            return self.map
+
+        return None
 
     # This function syncs the GPU with the CPUs clock
     def sync(self, cycles):
@@ -215,6 +227,8 @@ class GPU(object):
                     # For testing purposes, just place it in a PIL container
                     self.memory.write(self.LCD_Y_LINE, 144)
 
+                    self.image_ready = True
+
                 else:
                     # Move to VRAM access
                     self.mode = 2
@@ -236,6 +250,8 @@ class GPU(object):
                 if self.line > 153:
                     self.line = 0
                     self.mode = 2
+
+                    self.image_ready = False
 
                     self.interrupt_type &= 0b11000000
 
